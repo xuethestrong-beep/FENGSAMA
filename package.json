@@ -8,6 +8,6 @@
     "ws3-fca": "github:NethWs3Dev/ws3-fca",
     "fs-extra": "^11.2.0",
     "yt-search": "^2.12.1",
-    "youtube-dl-exec": "^3.1.19"
+    "youtube-dl-exec": "^3.0.21"
   }
 }
