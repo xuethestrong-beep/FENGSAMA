@@ -1,0 +1,11 @@
+{
+  "botName": "FENG",
+  "prefix": "!",
+  "adminBot": ["61593117279214"],
+  "fcaOptions": {
+    "selfListen": false,
+    "autoMarkDelivery": false,
+    "listenEvents": false,
+    "forceLogin": false
+  }
+}
