@@ -1,6 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
-const play = require('play-dl');
+const yts = require('yt-search');
+const ytDlp = require('yt-dlp-exec');
 
 module.exports = {
   name: "music",
@@ -12,38 +13,42 @@ module.exports = {
     const cacheDir = path.join(__dirname, '../../cache');
     await fs.ensureDir(cacheDir);
     const filePath = path.join(cacheDir, `${Date.now()}.mp3`);
+    const cookiePath = path.join(cacheDir, 'cookies.txt');
 
     try {
-      // Use play-dl's own YouTube search - it bypasses Invalid URL error
-      const ytResults = await play.search(query, { limit: 1, source: { youtube: "video" } });
-      if (!ytResults.length) throw new Error("Not found on YouTube");
-      const video = ytResults[0];
+      // Write cookie file from Railway variable
+      if (process.env.YT_COOKIE) {
+        await fs.writeFile(cookiePath, process.env.YT_COOKIE);
+      }
 
-      const stream = await play.stream(video.url, { quality: 2 });
-      const write = fs.createWriteStream(filePath);
-      stream.stream.pipe(write);
+      const search = await yts(query);
+      if (!search.videos.length) throw new Error("Not found");
+      const video = search.videos[0];
 
-      await new Promise((res, rej) => {
-        write.on('finish', res);
-        write.on('error', rej);
-        stream.stream.on('error', rej);
-        setTimeout(() => rej(new Error("Timeout - try again")), 50000);
+      await ytDlp(video.url, {
+        extractAudio: true,
+        audioFormat: 'mp3',
+        audioQuality: 0,
+        output: filePath,
+        noPlaylist: true,
+        cookies: process.env.YT_COOKIE ? cookiePath : undefined,
+        addHeader: ['referer:youtube.com', 'user-agent:Mozilla/5.0']
       });
 
       const stat = await fs.stat(filePath);
       if (stat.size > 25 * 1024 * 1024) {
         await fs.remove(filePath);
-        return api.sendMessage("❌ >25MB, try shorter song.", event.threadID);
+        return api.sendMessage("❌ >25MB, try shorter.", event.threadID);
       }
 
       await api.sendMessage({ body: `🎵 ${video.title}`, attachment: fs.createReadStream(filePath) }, event.threadID);
       await fs.remove(filePath);
       api.unsendMessage(wait.messageID);
     } catch (e) {
-      console.log("[MUSIC]", e.message);
+      console.log("[MUSIC V2]", e.message);
       await fs.remove(filePath).catch(()=>{});
-      api.sendMessage(`❌ ${e.message}`, event.threadID);
+      api.sendMessage(`❌ ${e.message.slice(0,150)}`, event.threadID);
       try{ api.unsendMessage(wait.messageID); }catch{}
     }
   }
-                                             }
+        }
