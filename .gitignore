@@ -1,0 +1,5 @@
+node_modules
+appstate.json
+cache
+.env
+*.log
