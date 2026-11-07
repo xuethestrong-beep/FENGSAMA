@@ -1,6 +1,5 @@
 const fs = require('fs-extra');
 const path = require('path');
-const yts = require('yt-search');
 const play = require('play-dl');
 
 module.exports = {
@@ -15,11 +14,12 @@ module.exports = {
     const filePath = path.join(cacheDir, `${Date.now()}.mp3`);
 
     try {
-      const search = await yts(query);
-      if (!search.videos.length) throw new Error("Not found");
-      const video = search.videos[0];
+      // Use play-dl's own YouTube search - it bypasses Invalid URL error
+      const ytResults = await play.search(query, { limit: 1, source: { youtube: "video" } });
+      if (!ytResults.length) throw new Error("Not found on YouTube");
+      const video = ytResults[0];
 
-      const stream = await play.stream(video.url, { quality: 2 }); // 2 = lowest audio
+      const stream = await play.stream(video.url, { quality: 2 });
       const write = fs.createWriteStream(filePath);
       stream.stream.pipe(write);
 
@@ -27,13 +27,13 @@ module.exports = {
         write.on('finish', res);
         write.on('error', rej);
         stream.stream.on('error', rej);
-        setTimeout(() => rej(new Error("Timeout - YouTube blocked")), 45000);
+        setTimeout(() => rej(new Error("Timeout - try again")), 50000);
       });
 
       const stat = await fs.stat(filePath);
       if (stat.size > 25 * 1024 * 1024) {
         await fs.remove(filePath);
-        return api.sendMessage("❌ >25MB, try shorter.", event.threadID);
+        return api.sendMessage("❌ >25MB, try shorter song.", event.threadID);
       }
 
       await api.sendMessage({ body: `🎵 ${video.title}`, attachment: fs.createReadStream(filePath) }, event.threadID);
@@ -46,4 +46,4 @@ module.exports = {
       try{ api.unsendMessage(wait.messageID); }catch{}
     }
   }
-                                       }
+                                             }
