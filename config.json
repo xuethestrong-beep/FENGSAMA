@@ -3,9 +3,10 @@
   "prefix": "!",
   "adminBot": ["61593117279214"],
   "fcaOptions": {
-    "selfListen": false,
-    "autoMarkDelivery": false,
+    "selfListen": true,
+    "autoMarkDelivery": true,
+    "autoMarkRead": false,
     "listenEvents": false,
-    "forceLogin": false
+    "forceLogin": true
   }
 }
