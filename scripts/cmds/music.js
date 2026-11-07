@@ -10,83 +10,54 @@ function jsonToNetscape(jsonStr) {
     for (const c of cookies) {
       const domain = c.domain || ".youtube.com";
       const flag = domain.startsWith('.') ? "TRUE" : "FALSE";
-      const p = c.path || "/";
-      const sec = c.secure ? "TRUE" : "FALSE";
+      const p = c.path || "/"; const sec = c.secure ? "TRUE" : "FALSE";
       const exp = c.expirationDate ? Math.round(c.expirationDate) : 0;
+      if (!c.name) continue;
       out += `${domain}\t${flag}\t${p}\t${sec}\t${exp}\t${c.name}\t${c.value}\n`;
     }
     return out;
-  } catch { 
-    return jsonStr; 
-  }
+  } catch { return jsonStr; }
 }
 
 module.exports = {
   name: "music",
   config: { name: "music" },
   async execute({ api, event, args, reply }) {
-    // Use reply if passed from index.js, else fallback to reply-to-message
-    const sendReply = reply || ((text, attachment) => {
-      if (attachment) {
-        return api.sendMessage({ body: text, attachment }, event.threadID, event.messageID);
-      }
-      return api.sendMessage(text, event.threadID, event.messageID);
-    });
-
+    const sendReply = reply || ((t, a) => a ? api.sendMessage({ body: t, attachment: a }, event.threadID, event.messageID) : api.sendMessage(t, event.threadID, event.messageID));
     if (!args[0]) return sendReply("Usage: !music <song name>");
-
     const query = args.join(" ");
     let waitID = null;
-
-    try {
-      const wait = await api.sendMessage(`🎧 FENG searching: ${query}`, event.threadID, event.messageID);
-      waitID = wait.messageID;
-    } catch(e) {}
-
+    try { const w = await api.sendMessage(`🎧 FENG searching: ${query}`, event.threadID, event.messageID); waitID = w.messageID; } catch(e){}
     const cacheDir = path.join(__dirname, '../../cache');
     await fs.ensureDir(cacheDir);
     const filePath = path.join(cacheDir, `${Date.now()}.mp3`);
     const cookiePath = path.join(cacheDir, 'cookies.txt');
-
     try {
       if (process.env.YT_COOKIE) {
         let cc = process.env.YT_COOKIE.trim();
-        if (cc.startsWith('[') || cc.startsWith('{')) cc = jsonToNetscape(cc);
+        if (cc.startsWith('[')) cc = jsonToNetscape(cc);
         await fs.writeFile(cookiePath, cc);
       }
-
       const search = await yts(query);
       if (!search.videos.length) throw new Error("Not found");
-      const video = search.videos[0];
-
+      const video = search.videos.find(v => v.seconds < 600) || search.videos[0];
+      if (video.seconds > 600) throw new Error("Song too long (>10min)");
       await youtubedl(video.url, {
-        extractAudio: true,
-        audioFormat: 'mp3',
-        audioQuality: 0,
-        output: filePath,
-        noPlaylist: true,
-        cookies: process.env.YT_COOKIE ? cookiePath : undefined,
+        extractAudio: true, audioFormat: 'mp3', audioQuality: 5,
+        output: filePath, noPlaylist: true, maxFilesize: '24M',
+        cookies: process.env.YT_COOKIE && fs.existsSync(cookiePath) ? cookiePath : undefined,
+        noWarnings: true
       });
-
-      // This will now reply under their !music command
-      await api.sendMessage(
-        { body: `🎵 ${video.title}`, attachment: fs.createReadStream(filePath) }, 
-        event.threadID, 
-        event.messageID
-      );
-
-      await fs.remove(filePath);
-      if (waitID) {
-        try { api.unsendMessage(waitID); } catch {}
-      }
-
+      const stat = await fs.stat(filePath);
+      if (stat.size > 24*1024*1024) throw new Error("File too large (>24MB)");
+      await api.sendMessage({ body: `🎵 ${video.title}\n⏱️ ${video.timestamp}`, attachment: fs.createReadStream(filePath) }, event.threadID, event.messageID);
     } catch (e) {
-      console.log("[MUSIC V2]", e.message);
-      await fs.remove(filePath).catch(()=>{});
+      console.log("[MUSIC]", e.message);
       sendReply(`❌ ${e.message.slice(0,200)}`);
-      if (waitID) {
-        try { api.unsendMessage(waitID); } catch {}
-      }
+    } finally {
+      await fs.remove(filePath).catch(()=>{});
+      if (waitID) try { api.unsendMessage(waitID); } catch {}
+      if (global.gc) global.gc();
     }
   }
-  }
+                                 }
