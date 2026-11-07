@@ -12,6 +12,7 @@
     "ws3-fca": "^1.0.0",
     "fs-extra": "^11.2.0",
     "yt-search": "^2.10.4",
-    "@distube/ytdl-core": "^4.13.5"
+    "@distube/ytdl-core": "^4.13.5",
+    "npmlog": "^7.0.1"
   }
 }
