@@ -1,9 +1,28 @@
 const fs = require('fs-extra');
+const path = require('path');
 const ws3fca = require('ws3-fca');
 const login = ws3fca.login || ws3fca.default || ws3fca;
 const config = require('./config.json');
 
 console.log("[FENG] Starting...");
+
+// --- FIX FOR MUSIC: CREATE cookies.txt FROM ENV ---
+try {
+  const cookieEnv = process.env.YT_COOKIE;
+  if (cookieEnv) {
+    const cacheDir = '/app/cache';
+    const cookiePath = path.join(cacheDir, 'cookies.txt');
+    fs.ensureDirSync(cacheDir);
+    fs.writeFileSync(cookiePath, cookieEnv);
+    console.log(`[FENG] cookies.txt created: ${fs.statSync(cookiePath).size} bytes`);
+  } else {
+    console.log("[FENG] No YT_COOKIE ENV found - music may fail");
+    // create empty folder so yt-dlp doesn't crash on missing folder
+    fs.ensureDirSync('/app/cache');
+  }
+} catch(e) {
+  console.error("[FENG] Cookie write failed:", e.message);
+}
 
 // --- NEVER LET RAILWAY CRASH ---
 process.on('uncaughtException', err => {
@@ -53,20 +72,18 @@ function startBot(appState) {
     }
 
     console.log(`[FENG] LOGGED IN: ${api.getCurrentUserID()}`);
-    
     api.setOptions({
       selfListen: false,
       listenEvents: true,
       updatePresence: false,
       autoMarkDelivery: false,
       autoMarkRead: false,
-      online: true, // set true to keep MQTT alive on Railway
+      online: true,
       forceLogin: true,
       autoReconnect: true,
       logLevel: "silent"
     });
 
-    // heartbeat every 2 mins so Railway sees activity
     keepAlive = setInterval(() => {
       console.log(`[FENG] Alive - ${(process.memoryUsage().heapUsed/1024/1024).toFixed(1)}MB - ${new Date().toLocaleTimeString()}`);
       try { api.getCurrentUserID(); } catch(e){}
@@ -76,8 +93,6 @@ function startBot(appState) {
       if (err) {
         const errText = (err.message || err.error || JSON.stringify(err) || String(err)).toLowerCase();
         console.error("[FENG] MQTT Error:", err.message || err);
-        
-        // THIS IS THE 6-MIN ERROR YOU HAVE
         if (errText.includes('not logged in') || errText.includes('no longer logged in')) {
           return safeRestart(appState, 15000, "Not logged in");
         }
@@ -86,23 +101,18 @@ function startBot(appState) {
         }
         return safeRestart(appState, 30000, "MQTT Error: " + errText.slice(0,100));
       }
-
       if (!event || (event.type !== 'message' && event.type !== 'message_reply')) return;
       if (!event.body || event.senderID == api.getCurrentUserID()) return;
-
       const body = event.body.trim();
       const lowerBody = body.toLowerCase();
-
       const reply = (text) => {
         return new Promise((res, rej) => {
           api.sendMessage(text, event.threadID, (e, i) => e ? rej(e) : res(i), event.messageID);
         });
       };
-
       if (["hi","hello","hey"].includes(lowerBody)) {
         return reply("hello, wanna listen to music 🎶🎵\nJust type: !music [song name]").catch(()=>{});
       }
-
       const prefix = config.prefix || "!";
       if (!body.startsWith(prefix)) return;
       const args = body.slice(prefix.length).trim().split(/ +/);
@@ -122,7 +132,6 @@ try {
     console.log("[FENG] Loaded from appstate.json");
   }
 } catch(e){}
-
 if (!appState) {
   try {
     let raw = process.env.FBSTATE || process.env.APPSTATE;
@@ -134,10 +143,9 @@ if (!appState) {
     }
   } catch(e){ console.log("[FENG] ENV parse failed:", e.message); }
 }
-
 if (!appState) {
   console.error("[FENG] No appstate found. Keeping process alive for logs...");
   setInterval(()=>{}, 10000);
 } else {
   startBot(appState);
-          }
+        }
