@@ -1,63 +1,57 @@
 const fs = require('fs-extra');
 const path = require('path');
-const yts = require('yt-search');
-const youtubedl = require('youtube-dl-exec');
-
-function jsonToNetscape(jsonStr) {
-  try {
-    const cookies = JSON.parse(jsonStr);
-    let out = "# Netscape HTTP Cookie File\n";
-    for (const c of cookies) {
-      const domain = c.domain || ".youtube.com";
-      const flag = domain.startsWith('.') ? "TRUE" : "FALSE";
-      const p = c.path || "/"; const sec = c.secure ? "TRUE" : "FALSE";
-      const exp = c.expirationDate ? Math.round(c.expirationDate) : 0;
-      if (!c.name) continue;
-      out += `${domain}\t${flag}\t${p}\t${sec}\t${exp}\t${c.name}\t${c.value}\n`;
-    }
-    return out;
-  } catch { return jsonStr; }
-}
+const { exec } = require('child_process');
+const util = require('util');
+const execAsync = util.promisify(exec);
 
 module.exports = {
   name: "music",
   config: { name: "music" },
-  async execute({ api, event, args, reply }) {
-    const sendReply = reply || ((t, a) => a ? api.sendMessage({ body: t, attachment: a }, event.threadID, event.messageID) : api.sendMessage(t, event.threadID, event.messageID));
-    if (!args[0]) return sendReply("Usage: !music <song name>");
+  async execute({ api, event, args }) {
+    if (!args[0]) return api.sendMessage("Usage: !music <song>", event.threadID, event.messageID);
     const query = args.join(" ");
-    let waitID = null;
-    try { const w = await api.sendMessage(`🎧 FENG searching: ${query}`, event.threadID, event.messageID); waitID = w.messageID; } catch(e){}
+    await api.sendMessage(`🎧 Searching: ${query}`, event.threadID, event.messageID);
+
     const cacheDir = path.join(__dirname, '../../cache');
     await fs.ensureDir(cacheDir);
     const filePath = path.join(cacheDir, `${Date.now()}.mp3`);
     const cookiePath = path.join(cacheDir, 'cookies.txt');
+
     try {
       if (process.env.YT_COOKIE) {
-        let cc = process.env.YT_COOKIE.trim();
-        if (cc.startsWith('[')) cc = jsonToNetscape(cc);
-        await fs.writeFile(cookiePath, cc);
+        let c = process.env.YT_COOKIE.trim();
+        if (c.startsWith('"') && c.endsWith('"')) { try { c = JSON.parse(c); } catch {} }
+        if (c.startsWith('[')) {
+          const cookies = JSON.parse(c);
+          let out = "# Netscape HTTP Cookie File\n";
+          for (const ck of cookies) {
+            if(!ck.name) continue;
+            out += `${ck.domain||'.youtube.com'}\t${ck.domain?.startsWith('.')?'TRUE':'FALSE'}\t${ck.path||'/'}\t${ck.secure?'TRUE':'FALSE'}\t${Math.round(ck.expirationDate||0)}\t${ck.name}\t${ck.value}\n`;
+          }
+          c = out;
+        }
+        await fs.writeFile(cookiePath, c);
       }
-      const search = await yts(query);
-      if (!search.videos.length) throw new Error("Not found");
-      const video = search.videos.find(v => v.seconds < 600) || search.videos[0];
-      if (video.seconds > 600) throw new Error("Song too long (>10min)");
-      await youtubedl(video.url, {
-        extractAudio: true, audioFormat: 'mp3', audioQuality: 5,
-        output: filePath, noPlaylist: true, maxFilesize: '24M',
-        cookies: process.env.YT_COOKIE && fs.existsSync(cookiePath) ? cookiePath : undefined,
-        noWarnings: true
-      });
+
+      const hasCookie = fs.existsSync(cookiePath);
+      // FIX: Added --format "bestaudio/best" and extractor-args
+      const cmd = `yt-dlp ${hasCookie ? `--cookies "${cookiePath}"` : ''} --format "bestaudio[ext=m4a]/bestaudio/best" -x --audio-format mp3 --audio-quality 5 -o "${filePath}" --max-filesize 24M --no-playlist --extractor-args "youtube:player_client=android,web" "ytsearch1:${query}" 2>&1`;
+      
+      console.log("[MUSIC] " + cmd);
+      const { stdout } = await execAsync(cmd, { timeout: 90000 });
+      console.log(stdout);
+
+      if (!fs.existsSync(filePath)) throw new Error(`Download failed: ${stdout.slice(-500)}`);
+      
       const stat = await fs.stat(filePath);
-      if (stat.size > 24*1024*1024) throw new Error("File too large (>24MB)");
-      await api.sendMessage({ body: `🎵 ${video.title}\n⏱️ ${video.timestamp}`, attachment: fs.createReadStream(filePath) }, event.threadID, event.messageID);
+      if (stat.size < 10000) throw new Error("File too small, blocked");
+
+      await api.sendMessage({ body: `🎵 ${query}`, attachment: fs.createReadStream(filePath) }, event.threadID, event.messageID);
     } catch (e) {
-      console.log("[MUSIC]", e.message);
-      sendReply(`❌ ${e.message.slice(0,200)}`);
+      console.error("[MUSIC]", e.message);
+      api.sendMessage(`❌ Music error:\n${e.message.slice(0,600)}`, event.threadID, event.messageID);
     } finally {
       await fs.remove(filePath).catch(()=>{});
-      if (waitID) try { api.unsendMessage(waitID); } catch {}
-      if (global.gc) global.gc();
     }
   }
-                                 }
+  }
