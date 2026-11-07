@@ -1,48 +1,33 @@
 const fs = require('fs-extra');
-const path = require('path');
 const login = require('ws3-fca');
 const config = require('./config.json');
 
-fs.ensureDirSync(path.join(__dirname, 'cache'));
-fs.ensureDirSync(path.join(__dirname, 'scripts/cmds'));
-
-if (global.gc) setInterval(() => global.gc(), 3 * 60 * 1000);
+console.log("[FENG] Starting clean...");
 
 const cmds = new Map();
-const cmdsPath = path.join(__dirname, 'scripts/cmds');
-for (const file of fs.readdirSync(cmdsPath)) {
-  if (!file.endsWith('.js')) continue;
-  const cmd = require(path.join(cmdsPath, file));
-  cmds.set(cmd.name, cmd);
-  console.log(`[FENG] + ${cmd.name}`);
+for (const f of fs.readdirSync('./scripts/cmds')) {
+ if(!f.endsWith('.js')) continue;
+ try{ const c=require(`./scripts/cmds/${f}`); cmds.set(c.name,c); }catch(e){}
 }
 
-let appState;
-if (process.env.APPSTATE) {
-  appState = JSON.parse(process.env.APPSTATE);
-} else {
-  appState = JSON.parse(fs.readFileSync('appstate.json', 'utf8'));
-}
-
-login({ appState }, config.fcaOptions, (err, api) => {
-  if (err) return console.error(err);
-  console.log(`[FENG] Running - ${(process.memoryUsage().heapUsed/1024/1024).toFixed(1)}MB`);
-  fs.writeFileSync('appstate.json', JSON.stringify(api.getAppState()));
-
-  api.listenMqtt(async (err, event) => {
-    if (err || event.type !== 'message' || !event.body) return;
-    if (!event.body.startsWith(config.prefix)) return;
-
-    const args = event.body.slice(config.prefix.length).trim().split(/ +/);
+function start(appState){
+ login({ appState, ...config.fcaOptions }, (err, api)=>{
+  if(err) return console.error("Login failed", err);
+  console.log("[FENG] LOGGED IN:", api.getCurrentUserID());
+  
+  api.listenMqtt((err, event)=>{
+    if(err) return;
+    console.log("[EVENT]", event.type, event.body || "");
+    if(!event.body) return;
+    if(!event.body.startsWith(config.prefix)) return;
+    
+    const args = event.body.slice(1).split(/ +/);
     const name = args.shift().toLowerCase();
     const cmd = cmds.get(name);
-    if (!cmd) return;
-
-    try {
-      await cmd.execute({ api, event, args, cmds, config });
-    } catch (e) {
-      console.error(e);
-    }
-    if (global.gc) global.gc();
+    if(cmd) cmd.execute({ api, event, args, config }).catch(e=>console.log(e));
   });
-});
+ });
+}
+
+let appState = JSON.parse(process.env.APPSTATE || fs.readFileSync('appstate.json','utf8'));
+start(appState);
