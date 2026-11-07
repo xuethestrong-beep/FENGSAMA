@@ -1,5 +1,6 @@
 const fs = require('fs-extra');
-const login = require('ws3-fca');
+const ws3fca = require('ws3-fca');
+const login = ws3fca.login || ws3fca.default || ws3fca;
 const config = require('./config.json');
 
 console.log("[FENG] Starting...");
