@@ -5,6 +5,14 @@ const config = require('./config.json');
 
 console.log("[FENG] Starting...");
 
+// --- NEVER LET RAILWAY CRASH ---
+process.on('uncaughtException', err => {
+  console.error("[FENG] Uncaught Exception, keeping alive:", err.message);
+});
+process.on('unhandledRejection', reason => {
+  console.error("[FENG] Unhandled Rejection, keeping alive:", reason);
+});
+
 const cmds = new Map();
 try {
   for (const f of fs.readdirSync('./scripts/cmds')) {
@@ -25,37 +33,61 @@ function safeRestart(appState, delay = 30000, reason = "") {
   console.log(`[FENG] Restarting in ${delay/1000}s - ${reason}`);
   try { if (currentListener) currentListener(); } catch(e){}
   if (keepAlive) clearInterval(keepAlive);
-  setTimeout(() => { restarting = false; startBot(appState); }, delay);
+  setTimeout(() => {
+    restarting = false;
+    startBot(appState);
+  }, delay);
 }
 
 function startBot(appState) {
   login({ appState, ...config.fcaOptions }, (err, api) => {
     if (err) {
-      console.error("[FENG] Login failed:", err.error || err);
-      const msg = (JSON.stringify(err) + (err.error||'')).toLowerCase();
-      if (msg.includes('retrieving userid') || msg.includes('unknown location') || msg.includes('checkpoint')) {
-        console.error("[FENG] APPSTATE expired/blocked.");
+      console.error("[FENG] Login failed:", err.error || err.message || err);
+      const msg = JSON.stringify(err) + (err.message||'') + (err.error||'');
+      const low = msg.toLowerCase();
+      if (low.includes('retrieving userid') || low.includes('unknown location') || low.includes('checkpoint') || low.includes('appstate')) {
+        console.error("[FENG] APPSTATE expired/blocked. Will retry in 15m");
         return setTimeout(() => startBot(appState), 15 * 60 * 1000);
       }
       return setTimeout(() => startBot(appState), 60000);
     }
+
     console.log(`[FENG] LOGGED IN: ${api.getCurrentUserID()}`);
-    api.setOptions({ selfListen: false, listenEvents: true, updatePresence: false, autoMarkDelivery: false, autoMarkRead: false, online: false });
     
+    api.setOptions({
+      selfListen: false,
+      listenEvents: true,
+      updatePresence: false,
+      autoMarkDelivery: false,
+      autoMarkRead: false,
+      online: true, // set true to keep MQTT alive on Railway
+      forceLogin: true,
+      autoReconnect: true,
+      logLevel: "silent"
+    });
+
+    // heartbeat every 2 mins so Railway sees activity
     keepAlive = setInterval(() => {
-      console.log(`[FENG] Alive - ${(process.memoryUsage().heapUsed/1024/1024).toFixed(1)}MB`);
-    }, 15 * 60 * 1000);
+      console.log(`[FENG] Alive - ${(process.memoryUsage().heapUsed/1024/1024).toFixed(1)}MB - ${new Date().toLocaleTimeString()}`);
+      try { api.getCurrentUserID(); } catch(e){}
+    }, 2 * 60 * 1000);
 
     currentListener = api.listenMqtt((err, event) => {
       if (err) {
-        clearInterval(keepAlive);
-        const m = JSON.stringify(err);
-        console.error("[FENG] MQTT Error:", m);
-        if (m.includes('Not logged in')) return safeRestart(appState, 15000, "Not logged in");
-        if (m.includes('Server unavailable')) return safeRestart(appState, 90000, "Server unavailable");
-        return safeRestart(appState, 30000, "MQTT Error");
+        const errText = (err.message || err.error || JSON.stringify(err) || String(err)).toLowerCase();
+        console.error("[FENG] MQTT Error:", err.message || err);
+        
+        // THIS IS THE 6-MIN ERROR YOU HAVE
+        if (errText.includes('not logged in') || errText.includes('no longer logged in')) {
+          return safeRestart(appState, 15000, "Not logged in");
+        }
+        if (errText.includes('server unavailable') || errText.includes('connection refused') || errText.includes('econnreset') || errText.includes('timeout')) {
+          return safeRestart(appState, 90000, "Server unavailable - will retry in 90s");
+        }
+        return safeRestart(appState, 30000, "MQTT Error: " + errText.slice(0,100));
       }
-      if (event.type !== 'message' && event.type !== 'message_reply') return;
+
+      if (!event || (event.type !== 'message' && event.type !== 'message_reply')) return;
       if (!event.body || event.senderID == api.getCurrentUserID()) return;
 
       const body = event.body.trim();
@@ -73,13 +105,11 @@ function startBot(appState) {
 
       const prefix = config.prefix || "!";
       if (!body.startsWith(prefix)) return;
-
       const args = body.slice(prefix.length).trim().split(/ +/);
       const name = args.shift().toLowerCase();
       const cmd = cmds.get(name);
       if (!cmd) return;
-
-      try { cmd.execute({ api, event, args, cmds, config, prefix, reply }); }
+      try { cmd.execute({ api, event, args, cmds, config, prefix, reply }); } 
       catch(e){ reply(`Error: ${e.message}`).catch(()=>{}); }
     });
   });
@@ -92,6 +122,7 @@ try {
     console.log("[FENG] Loaded from appstate.json");
   }
 } catch(e){}
+
 if (!appState) {
   try {
     let raw = process.env.FBSTATE || process.env.APPSTATE;
@@ -103,5 +134,10 @@ if (!appState) {
     }
   } catch(e){ console.log("[FENG] ENV parse failed:", e.message); }
 }
-if (!appState) { console.error("[FENG] No appstate found."); process.exit(1); }
-startBot(appState);
+
+if (!appState) {
+  console.error("[FENG] No appstate found. Keeping process alive for logs...");
+  setInterval(()=>{}, 10000);
+} else {
+  startBot(appState);
+          }
