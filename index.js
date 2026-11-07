@@ -13,103 +13,94 @@ try {
     const cmd = require(`./scripts/cmds/${f}`);
     cmds.set(cmd.config?.name || cmd.name || f.replace('.js',''), cmd);
   }
-  console.log(`[FENG] Loaded ${cmds.size} commands`);
-} catch(e){
-  console.log("[FENG] No cmds folder yet");
+} catch(e){}
+
+let restarting = false;
+function safeRestart(appState, delay = 30000, reason = "") {
+  if (restarting) return;
+  restarting = true;
+  console.log(`[FENG] Restarting in ${delay/1000}s - ${reason}`);
+  setTimeout(() => {
+    restarting = false;
+    startBot(appState);
+  }, delay);
 }
 
 function startBot(appState) {
   login({ appState, ...config.fcaOptions }, (err, api) => {
     if (err) {
-      console.error("[FENG] Login failed, retry in 10s", err.error || err);
-      return setTimeout(() => startBot(appState), 10000);
+      console.error("[FENG] Login failed:", err.error || err);
+      return setTimeout(() => startBot(appState), 60000);
     }
 
     console.log(`[FENG] LOGGED IN: ${api.getCurrentUserID()}`);
-    console.log(`[FENG] Running - ${(process.memoryUsage().heapUsed/1024/1024).toFixed(1)}MB`);
+    api.setOptions({ selfListen: false, listenEvents: true, updatePresence: false });
 
-    // === REAL FIX FOR YOUR RED ERROR ===
-    // 1. Disable the logger for reaction errors
-    if (api._logger) {
-      const oldError = api._logger.error;
-      api._logger.error = (...args) => {
-        if (args[0] && typeof args[0] === 'string' && args[0].includes('setPostReaction')) return;
-        return oldError(...args);
-      };
-    }
+    // Fix reactions
+    api.setPostReaction = () => Promise.resolve(null);
+    api.setMessageReaction = () => Promise.resolve(null);
 
-    // 2. Fully override broken methods (promise + callback support)
-    api.setPostReaction = (postID, type, callback) => {
-      if (callback) callback(null);
-      return Promise.resolve(null);
-    };
-    api.setMessageReaction = (reaction, messageID, callback, force) => {
-      if (callback) callback(null);
-      return Promise.resolve(null);
-    };
+    // --- KEEP-ALIVE TRICK: makes FB think you're active ---
+    // Ping every 8 minutes so MQTT doesn't idle out
+    const keepAlive = setInterval(() => {
+      try { api.markAsReadAll(() => {}); } catch(e){}
+      console.log(`[FENG] KeepAlive ping - ${(process.memoryUsage().heapUsed/1024/1024).toFixed(1)}MB`);
+    }, 8 * 60 * 1000);
 
-    api.listenMqtt((err, event) => {
+    // --- FORCE RESTART BEFORE FB KICKS YOU ---
+    // FB schedules reconnect at 51 mins and then blocks. We restart at 45 mins ourselves with clean ID
+    const forceRestart = setTimeout(() => {
+      console.log("[FENG] 45min pro-active restart to avoid FB block");
+      clearInterval(keepAlive);
+      try { api.logout(); } catch(e){}
+      safeRestart(appState, 5000, "45min rotation");
+    }, 45 * 60 * 1000);
+
+    const listener = api.listenMqtt((err, event) => {
       if (err) {
-        if (err.error && err.error.includes('Not logged in')) {
-          console.log("[FENG] Re-login needed...");
-          return startBot(appState);
+        clearInterval(keepAlive);
+        clearTimeout(forceRestart);
+        const msg = JSON.stringify(err);
+        if (msg.includes('Not logged in')) {
+          return safeRestart(appState, 10000, "Not logged in");
         }
-        return;
+        if (msg.includes('Server unavailable') || msg.includes('Connection refused')) {
+          // Backoff longer to avoid IP ban
+          return safeRestart(appState, 60000 + Math.random()*30000, "Server unavailable - Railway IP blocked");
+        }
+        return safeRestart(appState, 20000, "MQTT Error");
       }
-      
+
       if (event.type === 'message' || event.type === 'message_reply') {
-        if (!event.body) return;
-        // prevent bot responding to itself
-        if (event.senderID === api.getCurrentUserID()) return;
-
-        console.log(`[MSG] ${event.senderID}: ${event.body.slice(0,50)}`);
-
+        if (!event.body || event.senderID == api.getCurrentUserID()) return;
         const prefix = config.prefix || "!";
         if (!event.body.startsWith(prefix)) return;
-        
         const args = event.body.slice(prefix.length).trim().split(/ +/);
         const name = args.shift().toLowerCase();
         const cmd = cmds.get(name);
         if (!cmd) return;
-        
-        try { 
-          cmd.execute({ api, event, args, cmds, config, prefix }); 
-        } catch(e){ 
-          console.log(`[CMD ERROR] ${name}: ${e.message}`); 
-        }
+        try { cmd.execute({ api, event, args, cmds, config, prefix }); } catch(e){ console.log(`[CMD ERROR] ${e.message}`); }
       }
     });
+
+    // If listener returns error handler
+    if (listener && listener.stopListening) {
+      // good
+    }
   });
 }
 
+// Load appstate
 let appState = null;
-try {
-  // Try 1: file (if you added volume)
-  if (fs.existsSync('appstate.json')) {
-    appState = JSON.parse(fs.readFileSync('appstate.json','utf8'));
-    console.log(`[FENG] Loaded appstate from file (${appState.length} cookies)`);
-  }
-} catch(e) { console.log("[FENG] file read failed", e.message) }
-
+try { if (fs.existsSync('appstate.json')) appState = JSON.parse(fs.readFileSync('appstate.json','utf8')); } catch(e){}
 if (!appState) {
   try {
-    // Try 2: ENV (Railway)
     if (process.env.APPSTATE) {
       let raw = process.env.APPSTATE.trim();
-      // Railway sometimes wraps it in quotes
-      if (raw.startsWith('"') && raw.endsWith('"')) {
-        raw = JSON.parse(raw);
-      }
+      if (raw.startsWith('"') && raw.endsWith('"')) raw = JSON.parse(raw);
       appState = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      console.log(`[FENG] Loaded appstate from ENV (${appState.length} cookies)`);
     }
-  } catch(e) { console.log("[FENG] ENV parse failed:", e.message) }
+  } catch(e){ console.log("[FENG] ENV parse failed", e.message) }
 }
-
-if (!appState) {
-  console.error("[FENG] No appstate found! Put appstate.json or APPSTATE env");
-  console.error("[FENG] ENV exists?", !!process.env.APPSTATE, "Length:", process.env.APPSTATE?.length || 0);
-  process.exit(1);
-}
-
+if (!appState) { console.error("[FENG] No appstate"); process.exit(1); }
 startBot(appState);
