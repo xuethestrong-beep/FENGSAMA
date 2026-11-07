@@ -3,3 +3,6 @@ appstate.json
 cache
 .env
 *.log
+cookies.txt
+fbstate.json
+.DS_Store
