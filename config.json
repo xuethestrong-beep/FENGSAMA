@@ -1,6 +1,6 @@
 {
   "botName": "FENG",
-  "prefix": "!",
+  "prefix": "",
   "adminBot": ["61593117279214", "61596529340737"],
   "fcaOptions": {
     "selfListen": false,
