@@ -81,15 +81,34 @@ function startBot(appState) {
   });
 }
 
-let appState;
+let appState = null;
 try {
-  if (process.env.APPSTATE) {
-    appState = JSON.parse(process.env.APPSTATE);
-  } else {
+  // Try 1: file (if you added volume)
+  if (fs.existsSync('appstate.json')) {
     appState = JSON.parse(fs.readFileSync('appstate.json','utf8'));
+    console.log(`[FENG] Loaded appstate from file (${appState.length} cookies)`);
   }
-  startBot(appState);
-} catch(e) {
+} catch(e) { console.log("[FENG] file read failed", e.message) }
+
+if (!appState) {
+  try {
+    // Try 2: ENV (Railway)
+    if (process.env.APPSTATE) {
+      let raw = process.env.APPSTATE.trim();
+      // Railway sometimes wraps it in quotes
+      if (raw.startsWith('"') && raw.endsWith('"')) {
+        raw = JSON.parse(raw);
+      }
+      appState = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      console.log(`[FENG] Loaded appstate from ENV (${appState.length} cookies)`);
+    }
+  } catch(e) { console.log("[FENG] ENV parse failed:", e.message) }
+}
+
+if (!appState) {
   console.error("[FENG] No appstate found! Put appstate.json or APPSTATE env");
+  console.error("[FENG] ENV exists?", !!process.env.APPSTATE, "Length:", process.env.APPSTATE?.length || 0);
   process.exit(1);
-                              }
+}
+
+startBot(appState);
