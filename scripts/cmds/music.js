@@ -7,7 +7,6 @@ const execAsync = util.promisify(exec);
 module.exports = {
   name: "music",
   config: { name: "music", aliases: ["song", "play"] },
-
   async execute({ api, event, args }) {
     if (!args[0]) return api.sendMessage("Usage: !music <song name>", event.threadID, event.messageID);
     
@@ -20,7 +19,7 @@ module.exports = {
     const cookiePath = path.join(cacheDir, 'cookies.txt');
 
     try {
-      // Handle YT_COOKIE from Railway ENV
+      // 1. Write cookies from ENV (supports both formats)
       if (process.env.YT_COOKIE) {
         let c = process.env.YT_COOKIE.trim();
         if (c.startsWith('"') && c.endsWith('"')) { try { c = JSON.parse(c); } catch {} }
@@ -34,32 +33,36 @@ module.exports = {
           c = out;
         }
         await fs.writeFile(cookiePath, c);
+        console.log(`[MUSIC] Cookie written: ${(await fs.stat(cookiePath)).size} bytes`);
       }
 
-      const hasCookie = fs.existsSync(cookiePath) && (await fs.stat(cookiePath)).size > 100;
+      const hasCookie = fs.existsSync(cookiePath) && (await fs.stat(cookiePath)).size > 200;
+
+      // 2. Try strategy 1: WITH cookies + ios client (best)
+      let cmd = `yt-dlp ${hasCookie ? `--cookies "${cookiePath}"` : ''} --format "bestaudio[ext=m4a]/bestaudio/best" -x --audio-format mp3 --audio-quality 5 -o "${filePath}" --max-filesize 24M --no-playlist --extractor-args "youtube:player_client=ios,mweb" --force-ipv4 --no-warnings "ytsearch1:${query}" 2>&1`;
       
-      // FIXED: ios client instead of android,web - this is what was failing
-      const cmd = `yt-dlp ${hasCookie ? `--cookies "${cookiePath}"` : ''} --format "bestaudio[ext=m4a]/bestaudio/best" -x --audio-format mp3 --audio-quality 5 -o "${filePath}" --max-filesize 24M --no-playlist --extractor-args "youtube:player_client=ios,mweb" --extractor-args "youtube:player_skip=webpage" --force-ipv4 "ytsearch1:${query}" 2>&1`;
+      console.log("[MUSIC] Trying 1:", hasCookie ? "with cookies" : "no cookies");
+      try {
+        await execAsync(cmd, { timeout: 90000 });
+      } catch (e) {
+        console.log("[MUSIC] Try 1 failed, trying fallback without cookies + android client");
+        // 3. Fallback: WITHOUT cookies + android client (works when Railway IP is flagged)
+        cmd = `yt-dlp --format "bestaudio[ext=m4a]/bestaudio/best" -x --audio-format mp3 --audio-quality 5 -o "${filePath}" --max-filesize 24M --no-playlist --extractor-args "youtube:player_client=android,web" --force-ipv4 --no-warnings "ytsearch1:${query}" 2>&1`;
+        await execAsync(cmd, { timeout: 90000 });
+      }
 
-      console.log("[MUSIC] CMD:", cmd);
-      const { stdout } = await execAsync(cmd, { timeout: 90000 });
-      console.log("[MUSIC] LOG:", stdout.slice(-1000));
-
-      if (!fs.existsSync(filePath)) throw new Error(`YouTube blocked. Update YT_COOKIE. Log: ${stdout.slice(-500)}`);
+      if (!fs.existsSync(filePath)) throw new Error(`YouTube blocked. Railway IP is flagged. Try updating YT_COOKIE with a fresh login.`);
       
       const stat = await fs.stat(filePath);
       if (stat.size < 10000) throw new Error("Download blocked, file too small");
 
-      await api.sendMessage({ 
-        body: `🎵 ${query}`, 
-        attachment: fs.createReadStream(filePath) 
-      }, event.threadID, event.messageID);
+      await api.sendMessage({ body: `🎵 ${query}`, attachment: fs.createReadStream(filePath) }, event.threadID, event.messageID);
 
     } catch (e) {
       console.error("[MUSIC ERROR]", e.message);
-      api.sendMessage(`❌ Music error:\n${e.message.slice(0,500)}\n\nTip: Update YT_COOKIE in Railway`, event.threadID, event.messageID);
+      api.sendMessage(`❌ Music error:\n${e.message.slice(0,500)}\n\nTip: Export new cookies from YouTube using "Get cookies.txt LOCALLY" extension, then update YT_COOKIE in Railway and redeploy.`, event.threadID, event.messageID);
     } finally {
       await fs.remove(filePath).catch(()=>{});
     }
   }
-        }
+              }
