@@ -2,7 +2,7 @@
   "name": "FENG",
   "version": "2.0.0",
   "main": "index.js",
-  "engines": { "node": "20.x" },
+  "engines": { "node": "22.x" },
   "scripts": { "start": "node --max-old-space-size=350 --expose-gc index.js" },
   "dependencies": {
     "ws3-fca": "github:NethWs3Dev/ws3-fca",
