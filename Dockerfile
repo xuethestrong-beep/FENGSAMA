@@ -13,6 +13,10 @@ RUN pip3 install --break-system-packages --no-cache-dir yt-dlp --upgrade
 WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
+
 COPY . .
-RUN mkdir -p cache && chmod -R 777 cache
+
+# FIXED: absolute path + writable
+RUN mkdir -p /app/cache && chmod -R 777 /app/cache
+
 CMD ["npm", "start"]
