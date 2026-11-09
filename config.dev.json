@@ -11,9 +11,12 @@
   },
   "credentials": {
     "gmailAccount": {
-      "enable": false,
-      "user": "",
-      "pass": ""
+      "enable": true,
+      "user": "xxemperador0@gmail.com",
+      "type": "OAuth2",
+      "clientId": "846346064980-kueggqdu4l0aa1nj0nourcni9lq5isi2.apps.googleusercontent.com",
+      "clientSecret": "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",
+      "refreshToken": "1//04EO6mamd8PGcGYIARAAGAQSnwF-L9Irkiq_J6r-m7V1DLfgEL8R6RDyhJ0_abqWw7LcZwbr-l1117kQQ9eFoWT8DWj7FdKtk"
     }
   },
   "antiInbox": false,
