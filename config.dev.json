@@ -1,0 +1,64 @@
+{
+  "mainThreadId": "",
+  "ownerName": "FENG",
+  "godUID": "61593117279214",
+  "botAccount": {
+    "email": "",
+    "password": "",
+    "twoFactorCode": "",
+    "userAgent": "Mozilla/5.0 (Linux; Android 12; M2102J20SG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.0.0 Mobile Safari/537.36",
+    "autoUseWhenEmpty": false
+  },
+  "antiInbox": false,
+  "language": "en",
+  "nickNameBot": "FENG bot",
+  "prefix": "!",
+  "usePrefix": {
+    "enable": true
+  },
+  "adminOnly": {
+    "enable": false
+  },
+  "adminBot": ["61593117279214"],
+  "whiteListMode": {
+    "enable": false,
+    "whiteListIds": []
+  },
+  "whiteListModeThread": {
+    "enable": false,
+    "whiteListThreadIds": []
+  },
+  "database": {
+    "type": "sqlite",
+    "uriMongodb": "",
+    "autoSyncWhenStart": false,
+    "autoRefreshThreadInfoFirstTime": true
+  },
+  "timeZone": "Asia/Manila",
+  "dashBoard": {
+    "enable": false,
+    "port": 3001
+  },
+  "serverUptime": {
+    "enable": false,
+    "port": 3001
+  },
+  "autoRestart": {
+    "time": null
+  },
+  "autoUptime": {
+    "enable": false
+  },
+  "autoRefreshFbstate": true,
+  "hideNotiMessage": {
+    "commandNotFound": false
+  },
+  "logEvents": {
+    "disableAll": true
+  },
+  "optionsFca": {
+    "forceLogin": true,
+    "listenEvents": true,
+    "selfListen": false
+  }
+}
