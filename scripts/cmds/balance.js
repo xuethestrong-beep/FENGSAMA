@@ -1,98 +1,121 @@
 const { createCanvas, loadImage } = require("canvas");
 const fs = require("fs-extra");
 const path = require("path");
+const crypto = require("crypto");
+const axios = require("axios");
 
-function getLevel(money) {
-  if (!isFinite(money)) money = 0;
-  money = Math.floor(money);
-  const MAX = 99800100;
-  let prestige = Math.floor(money / MAX);
-  let remaining = money % MAX;
-  let level = Math.floor(Math.sqrt(remaining / 100)) + 1;
-  if (level > 999) level = 999;
-  if (level < 1) level = 1;
-  const cur = Math.pow(level - 1, 2) * 100;
-  const next = Math.pow(level, 2) * 100;
-  const need = next - remaining;
-  const perc = Math.max(0, Math.min(99, Math.floor(((remaining - cur) / (next - cur)) * 100)));
-  return { prestige, level, need, perc };
+function getRankTitle(level, tier) {
+  if (tier === 5) return "☠️ ETERNAL VOID";
+  if (tier === 4) return "👑 GOD VAMPIRE QUEEN";
+  if (tier === 3) return "❄️ OVERLORD";
+  if (tier === 2) return "🦇 VAMPIRE KING";
+  if (level >= 100) return "👑 LEGEND";
+  if (level >= 50) return "💎 DIAMOND";
+  if (level >= 30) return "🏆 GOLD";
+  if (level >= 15) return "🥈 SILVER";
+  if (level >= 5) return "🥉 BRONZE";
+  return "🌱 ALIVE";
+}
+
+function getTier(level, money) {
+  const prestige = Math.floor(money / 99800100);
+  if (prestige >= 1 || level >= 700) return 5;
+  if (level >= 300) return 4;
+  if (level >= 100) return 3;
+  if (level >= 50) return 2;
+  return 1;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
 
 module.exports = {
- config: { name: "balance", aliases: ["bal"], version: "13.2 DYNAMIC", author: "FENG", countDown: 2, role: 0, category: "economy" },
+ config: { name: "balance", aliases: ["bal"], version: "2.5 TIER + ANIME", author: "FENG", countDown: 2, role: 0, category: "economy" },
  onStart: async function ({ message, event, usersData }) {
   const uid = event.senderID;
-  const data = await usersData.get(uid);
-  let money = data.money || 0;
-  if (!isFinite(money) || money < 0) money = 0;
-
-  const { prestige, level, need, perc } = getLevel(money);
-  const points = level * 124 + prestige * 2500;
-
+  const dir = path.join(__dirname, "tmp");
+  const out = path.join(dir, `bal_${uid}_${Date.now()}_${crypto.randomUUID()}.png`);
+  let readStream = null;
   try {
-    const canvas = createCanvas(1280, 853);
-    const ctx = canvas.getContext("2d");
+    const userData = await usersData.get(uid);
+    const name = userData.name || "User";
+    let money = Math.max(0, Number(userData.money) || 0);
+    let level = Math.floor(Math.sqrt(money / 100)) + 1;
+    if (level > 999) level = 999;
 
-    // THIS is your card image - must be in same folder
-    const bgPath = path.join(__dirname, "luminous.png");
-    if (!await fs.pathExists(bgPath)) {
-      return message.reply("❌ Missing luminous.png - Put your card image in scripts/cmds/luminous.png");
-    }
+    const tier = getTier(level, money);
+    const rankTitle = getRankTitle(level, tier);
+    
+    const currentLevelCost = Math.pow(level - 1, 2) * 100;
+    const nextLevelCost = Math.pow(level, 2) * 100;
+    const progress = Math.min(1, (money - currentLevelCost) / (nextLevelCost - currentLevelCost || 1));
+
+    // Tier background priority: bg_tier{}.png > luminous.png
+    let bgPath = path.join(__dirname, `bg_tier${tier}.png`);
+    if (!await fs.pathExists(bgPath)) bgPath = path.join(__dirname, "luminous.png");
+    if (!await fs.pathExists(bgPath)) return message.reply(`MISSING ${bgPath} - add luminous.png`);
 
     const bg = await loadImage(bgPath);
-    ctx.drawImage(bg, 0, 0, 1280, 853);
+    const W = bg.width || 1280; const H = bg.height || 853;
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bg, 0, 0, W, H);
 
-    // DARK OVERLAY FOR TEXT
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
-    ctx.fillRect(200, 210, 340, 420);
+    // Tier color glow
+    const tierColors = { 1: "#4ade80", 2: "#a855f7", 3: "#38bdf8", 4: "#d4b36a", 5: "#ff0033" };
+    const color = tierColors[tier];
 
-    // NAME - centered
-    let name = (data.name || "USER").replace(/[^\x00-\x7F]/g, "").toUpperCase();
-    if (name.length > 18) name = name.slice(0,18);
-    ctx.fillStyle = "#f5e6c8";
-    ctx.font = "bold 26px serif";
-    ctx.textAlign = "center";
-    ctx.fillText(name, 370, 235);
+    ctx.fillStyle = "rgba(0,0,0,0.58)";
+    roundRect(ctx, 60, 60, 760, H - 120, 35); ctx.fill();
+    ctx.strokeStyle = color + "88"; ctx.lineWidth = 4; ctx.stroke();
 
-    // LEVEL / RANK
-    let rank = "VAMPIRE QUEEN";
-    if (prestige > 0) rank = `P${prestige} ${rank}`;
-    ctx.fillStyle = "#d4b36a";
-    ctx.font = "14px serif";
-    ctx.fillText(`${rank} • LV.${level}`, 370, 255);
+    // Avatar with tier color border
+    try {
+      const avatarUrl = `https://graph.facebook.com/${uid}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`;
+      const res = await axios.get(avatarUrl, { responseType: "arraybuffer", timeout: 8000 });
+      const avatar = await loadImage(Buffer.from(res.data));
+      const ax = 140, ay = 140, ar = 90;
+      ctx.save(); ctx.beginPath(); ctx.arc(ax+ar, ay+ar, ar, 0, Math.PI*2); ctx.closePath(); ctx.clip();
+      ctx.drawImage(avatar, ax, ay, ar*2, ar*2); ctx.restore();
+      ctx.strokeStyle = color; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.arc(ax+ar, ay+ar, ar+3, 0, Math.PI*2); ctx.stroke();
+    } catch {}
 
-    // DYNAMIC BALANCE - THIS WILL CHANGE
-    ctx.fillStyle = "#ffeaa0";
-    ctx.font = "bold 52px serif";
-    ctx.shadowColor = "#ffb700"; ctx.shadowBlur = 12;
-    ctx.fillText(`¥${Number(money).toLocaleString()}`, 370, 365);
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = "#a89bc8";
-    ctx.font = "11px sans-serif";
-    ctx.fillText(`${perc}% TO NEXT • NEED ¥${Number(need).toLocaleString()}`, 370, 390);
-
-    // BOTTOM BOXES
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#e8e0f0";
-    ctx.font = "bold 20px serif";
-    ctx.fillText(`¥${Number(money*4+1000000).toLocaleString()}`, 275, 485);
-    ctx.fillText(`${points.toLocaleString()} PT`, 470, 485);
-
-    ctx.font = "11px sans-serif";
-    ctx.fillStyle = "#d0c6c6";
     ctx.textAlign = "left";
-    ctx.fillText(`**** **** **** ${uid.slice(-4)}`, 185, 615);
+    ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 58px sans-serif";
+    ctx.fillText(name.length > 14 ? name.slice(0,14)+"…" : name, 360, 210);
+    ctx.fillStyle = color; ctx.font = "bold 30px sans-serif";
+    ctx.fillText(`${rankTitle} • LV.${level} • TIER ${tier}/5`, 360, 260);
 
-    const dir = path.join(__dirname, "tmp");
+    ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "bold 24px sans-serif";
+    ctx.fillText("TOTAL BALANCE", 140, 430);
+    ctx.fillStyle = "#FFD700"; ctx.font = "bold 78px sans-serif";
+    ctx.fillText(`$${money.toLocaleString()}`, 140, 510);
+
+    // Progress bar with tier color
+    ctx.fillStyle = "rgba(255,255,255,0.2)";
+    roundRect(ctx, 140, 560, 600, 22, 11); ctx.fill();
+    if (progress > 0) {
+      ctx.fillStyle = color;
+      roundRect(ctx, 140, 560, Math.max(22, 600*progress), 22, 11); ctx.fill();
+    }
+    ctx.fillStyle = "#FFFFFF"; ctx.font = "bold 22px sans-serif";
+    ctx.fillText(`${Math.floor(progress*100)}% to LV.${level+1} • Need $${(nextLevelCost-money).toLocaleString()}`, 140, 625);
+
     await fs.ensureDir(dir);
-    const out = path.join(dir, `bal_${uid}.png`);
     await fs.writeFile(out, canvas.toBuffer("image/png"));
-    return message.reply({ attachment: fs.createReadStream(out) });
-
-  } catch (e) {
-    console.log(e);
-    return message.reply("❌ bal error: " + e.message + "\nMake sure you have canvas installed");
+    readStream = fs.createReadStream(out);
+    await new Promise((res, rej) => {
+      message.reply({ body: `💰 ${name} | $${money.toLocaleString()} | ${rankTitle}`, attachment: readStream }, (e) => e?rej(e):res());
+    });
+  } catch (err) {
+    console.error("[BAL] Error:", err.message);
+    try { await message.reply("❌ Failed to generate balance card."); } catch {}
+  } finally {
+    if (readStream) try { readStream.destroy(); } catch {}
+    try { await fs.unlink(out); } catch {}
   }
  }
 };
