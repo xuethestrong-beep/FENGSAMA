@@ -4,61 +4,78 @@ const crypto = require("crypto");
 const { execFile } = require("child_process");
 const util = require("util");
 const execFileAsync = util.promisify(execFile);
+const MAX_SIZE = 25 * 1024 * 1024;
 
 module.exports = {
-  config: { name: "music", version: "5.6-debug", author: "FENG", countDown: 15, role: 0, category: "media" },
+  config: { name: "music", version: "5.7-fix", author: "FENG", countDown: 10, role: 0, category: "media", guide: "{pn} <song name>" },
   onStart: async function ({ message, args, event, api }) {
-    if (!args[0]) return message.reply("!music <name>");
-    const query = args.join(" ").trim();
+    if (!args[0]) return message.reply("🎵 Usage: !music <song name>");
+    const query = args.join(" ").trim().slice(0, 100);
 
-    let searchingID = null;
-    try {
-      const info = await message.reply(`🎧 Searching: ${query}`);
-      searchingID = info.messageID;
-    } catch {}
+    let searchingMsg = null;
+    try { searchingMsg = await message.reply(`🎧 Searching: ${query}`); } catch {}
+    const searchingID = searchingMsg?.messageID;
 
     const cacheDir = path.join(__dirname, "cache");
-    const baseName = `m_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+    const baseName = `m_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
     const base = path.join(cacheDir, baseName);
     const cookiePath = path.join(cacheDir, `cookies_${baseName}.txt`);
 
+    const safeUnsend = async (id) => { try { if (id) await api.unsendMessage(id); } catch {} };
+
     try {
       await fs.ensureDir(cacheDir);
-      const ytdlpArgs = ["-m", "yt_dlp", "--extractor-args", "youtube:player_client=android,mweb", "--js-runtimes", "deno,node", "-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "5", "-o", `${base}.%(ext)s`, `ytsearch1:${query}`, "--no-playlist", "--quiet"];
+
+      const ytdlpArgs = [
+        "--extractor-args", "youtube:player_client=android,ios",
+        "-f", "bestaudio[ext=m4a]/bestaudio/best",
+        "-x", "--audio-format", "mp3",
+        "--audio-quality", "5",
+        "--match-filter", "duration < 600",
+        "-o", `${base}.%(ext)s`,
+        `ytsearch1:${query}`,
+        "--no-playlist", "--quiet", "--no-warnings"
+      ];
 
       if (process.env.YT_COOKIE) {
-        await fs.writeFile(cookiePath, process.env.YT_COOKIE.replace(/\\n/g, "\n"));
-        ytdlpArgs.push("--cookies", cookiePath);
+        try {
+          await fs.writeFile(cookiePath, process.env.YT_COOKIE.replace(/\\n/g, "\n"));
+          ytdlpArgs.push("--cookies", cookiePath);
+        } catch {}
       }
 
-      const { stdout, stderr } = await execFileAsync("python3", ytdlpArgs, { timeout: 90000, maxBuffer: 10*1024*1024 });
-      
+      // Try yt-dlp binary first, then python3, then python
+      let lastErr;
+      for (const cmd of ["yt-dlp", "python3", "python"]) {
+        try {
+          if (cmd === "yt-dlp") {
+            await execFileAsync("yt-dlp", ytdlpArgs, { timeout: 120000 });
+          } else {
+            await execFileAsync(cmd, ["-m", "yt_dlp", ...ytdlpArgs], { timeout: 120000 });
+          }
+          lastErr = null;
+          break;
+        } catch (e) { lastErr = e; if (!String(e.message).includes("ENOENT") && !String(e.message).includes("not found")) break; }
+      }
+      if (lastErr) throw lastErr;
+
       const files = await fs.readdir(cacheDir);
       const found = files.find(f => f.startsWith(baseName));
-      if (!found) throw new Error(`NO_FILE - yt-dlp said: ${stderr || stdout || "nothing"}`);
-
+      if (!found) throw new Error("NO_FILE - yt-dlp found nothing, need YT_COOKIE");
+      
       const finalFile = path.join(cacheDir, found);
-      // Delete searching BEFORE send
-      if (searchingID) await api.unsendMessage(searchingID).catch(()=>{});
-      searchingID = null; // mark deleted
+      const stat = await fs.stat(finalFile);
+      if (stat.size > MAX_SIZE) throw new Error("TOO_BIG");
 
+      await safeUnsend(searchingID);
       await message.reply({ body: `🎵 ${query}`, attachment: fs.createReadStream(finalFile) });
-      await fs.remove(finalFile).catch(()=>{});
 
     } catch (e) {
-      console.error("[MUSIC-ERR]", e);
-      const errMsg = String(e.message || e).slice(0, 400);
-      if (searchingID) {
-        // Edit searching to show error instead of deleting
-        await api.editMessage?.(`❌ Failed: ${errMsg}`, searchingID).catch(async ()=>{
-          await api.unsendMessage(searchingID).catch(()=>{});
-          await message.reply(`❌ Failed: ${errMsg}`);
-        });
-      } else {
-        await message.reply(`❌ Failed: ${errMsg}`);
-      }
+      await safeUnsend(searchingID);
+      console.error("[MUSIC]", e);
+      return message.reply(`❌ Failed: ${String(e.message).slice(0, 300)}`);
     } finally {
-      try { const all = await fs.readdir(cacheDir); for (const f of all) if (f.startsWith(baseName)) await fs.remove(path.join(cacheDir, f)).catch(()=>{}); } catch {}
+      try { const all = await fs.readdir(cacheDir); for (const f of all) if (f.startsWith(baseName)) await fs.remove(path.join(cacheDir, f)); } catch {}
     }
   }
 };
