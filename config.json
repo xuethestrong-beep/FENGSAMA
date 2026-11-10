@@ -1,7 +1,7 @@
 {
   "mainThreadId": "2349229388914312",
-  "ownerName": "Suman", 
-  "godUID": "61579681288069",
+  "ownerName": "NIGG-", 
+  "godUID": "61593117279214",
   "notesMainThreadId": "MANDATORY: Set your main thread ID here. Use the 'tid' command to get your thread ID, then paste it here and restart the bot.",
   "botAccount": {
     "email": "harukiizxian@gmail.com",
@@ -31,7 +31,7 @@
   "antiInbox": false,
   "language": "en",
   "notesLanguage": "change to your language with ISO 639-1 code, available languages: vi (Vietnamese), en (English)",
-  "nickNameBot": "Kamisama AI",
+  "nickNameBot": "NIGG-",
   "prefix": "!",
 "usePrefix": {
   "enable": true,
@@ -45,7 +45,7 @@
     "ignoreCommand": []
   },
   "adminBot": [
-    "61579681288069"
+    "61593117279214"
   ],
   "whiteListMode": {
     "enable": false,
