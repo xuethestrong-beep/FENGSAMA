@@ -14,7 +14,7 @@ module.exports = {
       if (!leftID || String(leftID) === String(api.getCurrentUserID())) return;
 
       const userName = await usersData.getName(leftID).catch(()=> "Someone");
-      const leaveMsg = `FH SAYO ${userName}, BOBO KA. WALA KA NA NGANG AMBAG SA GC NA'TO, NAG-LEAVE KAPANG TABABOY KA 🥷🏿☄️`;
+      const leaveMsg = `bye ${userName}, NIGGA`;
 
       const paths = [
         path.join(__dirname, "cache", "leave.mp4"),
