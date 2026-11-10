@@ -2,89 +2,110 @@ const { createCanvas, loadImage } = require("canvas");
 const fs = require("fs-extra");
 const path = require("path");
 
-function getRank(money) {
-  if (money >= 5000000) return { rank: "GOD", level: 99, color: "#ffd700" };
-  if (money >= 1000000) return { rank: "VAMPIRE QUEEN", level: 90, color: "#8a2be2" };
-  if (money >= 500000) return { rank: "KING", level: 75, color: "#e74c3c" };
-  if (money >= 100000) return { rank: "LORD", level: 50, color: "#3498db" };
-  if (money >= 25000) return { rank: "KNIGHT", level: 25, color: "#2ecc71" };
-  if (money >= 5000) return { rank: "COMMONER", level: 10, color: "#95a5a6" };
-  return { rank: "PEASANT", level: 1, color: "#7f8c8d" };
+function getLevelData(money) {
+  const MAX = 99800100; // money for LV.999
+  let prestige = Math.floor(money / MAX);
+  let remaining = money % MAX;
+  let level = Math.floor(Math.sqrt(remaining / 100)) + 1;
+  if (level > 999) { level = 999; remaining = 0; }
+  if (level < 1) level = 1;
+
+  const cur = Math.pow(level - 1, 2) * 100;
+  const next = Math.pow(level, 2) * 100;
+  const percent = Math.max(0, Math.min(100, Math.floor(((remaining - cur) / (next - cur)) * 100)));
+  const needed = next - remaining;
+
+  let rank, color;
+  if (prestige >= 10) { rank = "ETERNAL VOID"; color = "#ff0000"; }
+  else if (prestige >= 5) { rank = "ETERNAL GOD"; color = "#ff006a"; }
+  else if (prestige >= 3) { rank = "COSMIC EMPEROR"; color = "#ffd700"; }
+  else if (prestige >= 1) { rank = "PRESTIGE LORD"; color = "#00e5ff"; }
+  else if (level >= 700) { rank = "GOD"; color = "#ffd700"; }
+  else if (level >= 300) { rank = "VAMPIRE KING"; color = "#8a2be2"; }
+  else if (level >= 150) { rank = "VAMPIRE QUEEN"; color = "#9b59b6"; }
+  else if (level >= 100) { rank = "OVERLORD"; color = "#3498db"; }
+  else if (level >= 50) { rank = "KING"; color = "#e67e22"; }
+  else if (level >= 20) { rank = "KNIGHT"; color = "#2ecc71"; }
+  else { rank = "ALIVE"; color = "#95a5a6"; }
+
+  return { level, prestige, rank, color, percent, needed, next, total: money, remaining };
 }
 
 module.exports = {
- config: { name: "balance", aliases: ["bal"], version: "7.0", author: "FENG", countDown: 3, role: 0, category: "economy" },
- onStart: async function ({ message, usersData, event }) {
-  const uid = event.senderID;
-  const userData = await usersData.get(uid);
-  const money = userData.money || 0;
-  const { rank, level, color } = getRank(money);
-
-  let avatar, luminous;
+ config: { name: "balance", aliases: ["bal"], version: "10.0 FINAL", author: "FENG", countDown: 3, role: 0, category: "economy" },
+ onStart: async function ({ message, event, usersData }) {
   try {
-    avatar = await loadImage(`https://graph.facebook.com/${uid}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`);
-  } catch {}
-  const lumPath = path.join(__dirname, "luminous.png");
-  if (await fs.pathExists(lumPath)) {
-    try { luminous = await loadImage(lumPath); } catch {}
-  }
+    const uid = event.senderID;
+    const data = await usersData.get(uid);
+    const money = data.money || 0;
+    const { level, prestige, rank, color, percent, needed, next, total } = getLevelData(money);
 
-  const canvas = createCanvas(800, 450);
-  const ctx = canvas.getContext("2d");
+    const canvas = createCanvas(850, 430);
+    const ctx = canvas.getContext("2d");
 
-  const grad = ctx.createLinearGradient(0,0,800,450);
-  grad.addColorStop(0, "#0f0a1e"); grad.addColorStop(1, "#25123d");
-  ctx.fillStyle = grad; ctx.fillRect(0,0,800,450);
+    const grad = ctx.createLinearGradient(0,0,850,430);
+    grad.addColorStop(0, "#0a0a0f"); grad.addColorStop(1, "#1e1433");
+    ctx.fillStyle = grad; ctx.fillRect(0,0,850,430);
 
-  if (luminous) {
-    ctx.drawImage(luminous, 420, 0, 380, 450);
-    const fade = ctx.createLinearGradient(420,0,520,0);
-    fade.addColorStop(0, "rgba(15,10,30,1)"); fade.addColorStop(1, "rgba(15,10,30,0)");
-    ctx.fillStyle = fade; ctx.fillRect(420,0,100,450);
-  }
+    try {
+      let bg = null;
+      const p1 = path.join(__dirname, "anibg.png");
+      const p2 = path.join(__dirname, "luminous.png");
+      if (await fs.pathExists(p1)) bg = await loadImage(p1);
+      else if (await fs.pathExists(p2)) bg = await loadImage(p2);
+      if (bg) {
+        ctx.globalAlpha = 0.6;
+        ctx.drawImage(bg, 470, 0, 380, 430);
+        ctx.globalAlpha = 1;
+      }
+    } catch {}
 
-  ctx.fillStyle = "rgba(255,255,255,0.96)";
-  ctx.beginPath(); ctx.roundRect(20,20,420,410,24); ctx.fill();
-  ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(20,20,420,8,4); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.roundRect(20,20,500,390,22); ctx.fill();
+    ctx.fillStyle = color; ctx.fillRect(20,20,500,12);
 
-  if (avatar) {
-    ctx.save(); ctx.beginPath(); ctx.arc(95,110,58,0,Math.PI*2); ctx.clip();
-    ctx.drawImage(avatar,37,52,116,116); ctx.restore();
-    ctx.strokeStyle = color; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(95,110,60,0,Math.PI*2); ctx.stroke();
-  }
+    try {
+      const av = await loadImage(`https://graph.facebook.com/${uid}/picture?width=512&height=512&access_token=6628568379%7Cc1e620fa708a1d5696fb991c1bde5662`);
+      ctx.save(); ctx.beginPath(); ctx.arc(85,85,52,0,Math.PI*2); ctx.clip();
+      ctx.drawImage(av,33,33,104,104); ctx.restore();
+      ctx.strokeStyle = color; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(85,85,54,0,Math.PI*2); ctx.stroke();
+    } catch {}
 
-  let name = "User";
-  try {
-    const info = await new Promise(r => global.GoatBot?.fbApi?.getUserInfo(uid, (e,d)=>r(d)));
-    if(info && info[uid]) name = info[uid].name;
-  } catch {}
-  if(name.length>18) name = name.slice(0,18)+"..";
+    let name = data.name || "User";
+    if (name.length > 18) name = name.slice(0,18);
 
-  ctx.fillStyle = "#1a0b2e"; ctx.font = "bold 24px Arial"; ctx.fillText(name, 175, 95);
-  ctx.fillStyle = color; ctx.font = "bold 11px Arial"; ctx.fillText(`✦ ${rank} • LUMINOUS END`, 175, 118);
-  ctx.fillStyle = "#666"; ctx.font = "10px Arial"; ctx.fillText("UID: "+uid, 175, 136);
+    ctx.fillStyle = "#111"; ctx.font = "bold 23px Arial"; ctx.fillText(name, 160, 75);
+    ctx.fillStyle = color; ctx.font = "bold 12px Arial";
+    if (prestige > 0) ctx.fillText(`✦ PRESTIGE ${prestige} • LV.${level} • ${rank} ✦`, 160, 100);
+    else ctx.fillText(`✦ LV.${level} • ${rank} • ALIVE ✦`, 160, 100);
+    ctx.fillStyle = "#888"; ctx.font = "10px Arial"; ctx.fillText(`UID: ${uid} • $${total.toLocaleString()} total`, 160, 120);
 
-  ctx.fillStyle = "rgba(0,0,0,0.08)"; ctx.fillRect(40,180,380,1);
+    ctx.fillStyle = "#999"; ctx.font = "bold 11px Arial"; ctx.fillText("CURRENT BALANCE", 40, 170);
+    ctx.fillStyle = "#111"; ctx.font = "bold 36px Arial"; ctx.fillText(`$${money.toLocaleString()}`, 40, 210);
+    ctx.fillStyle = color; ctx.font = "bold 13px Arial"; ctx.fillText(`≈ ¥${Math.floor(money*1.2).toLocaleString()}`, 40, 235);
 
-  ctx.fillStyle = "#999"; ctx.font = "bold 11px Arial"; ctx.fillText("CURRENT BALANCE", 40, 210);
-  ctx.fillStyle = "#1a0b2e"; ctx.font = "bold 42px Arial"; ctx.fillText(`$${Number(money).toLocaleString()}`, 40, 260);
-  ctx.fillStyle = color; ctx.font = "bold 13px Arial"; ctx.fillText(`≈ ¥${Math.floor(money*1.2).toLocaleString()}`, 40, 285);
+    ctx.fillStyle = "#eee"; ctx.beginPath(); ctx.roundRect(40, 255, 420, 18, 9); ctx.fill();
+    ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(40, 255, 420*(percent/100), 18, 9); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 11px Arial"; ctx.fillText(`${percent}%`, 230, 268);
 
-  // Dynamic stats box
-  ctx.fillStyle = "rgba(0,0,0,0.06)"; ctx.beginPath(); ctx.roundRect(40,310,380,80,14); ctx.fill();
-  ctx.fillStyle = "#1a0b2e"; ctx.font = "bold 10px Arial";
-  ctx.fillText("RANK", 70, 335); ctx.fillText("LEVEL", 195, 335); ctx.fillText("STATUS", 310, 335);
-  ctx.font = "bold 14px Arial";
-  ctx.fillStyle = color; ctx.fillText(rank, 70, 360);
-  ctx.fillStyle = "#1a0b2e"; ctx.fillText(`LV.${level}`, 195, 360);
-  ctx.fillStyle = money>0 ? "#2ecc71" : "#e74c3c"; ctx.fillText(money>0 ? "● RICH" : "● BROKE", 310, 360);
+    ctx.fillStyle = "#666"; ctx.font = "11px Arial";
+    ctx.fillText(`LV.${level} → LV.${level === 999 ? "MAX" : level+1}`, 40, 295);
+    ctx.fillText(`Need $${needed.toLocaleString()} for next LV`, 40, 312);
+    ctx.fillText(`Next LV at $${next.toLocaleString()}`, 40, 329);
 
-  ctx.fillStyle = "#aaa"; ctx.font = "9px Arial"; ctx.fillText(`${money.toLocaleString()} coins needed for next rank`, 70, 378);
+    ctx.fillStyle = "rgba(0,0,0,0.06)"; ctx.beginPath(); ctx.roundRect(40, 345, 420, 50, 12); ctx.fill();
+    ctx.fillStyle = "#111"; ctx.font = "bold 10px Arial";
+    ctx.fillText("RANK", 70, 365); ctx.fillText("LEVEL", 200, 365); ctx.fillText("PRESTIGE", 330, 365);
+    ctx.font = "bold 13px Arial";
+    ctx.fillStyle = color; ctx.fillText(rank, 70, 383);
+    ctx.fillStyle = "#111";
+    ctx.fillText(prestige > 0 ? `P${prestige} LV.${level}` : `LV.${level}`, 200, 383);
+    ctx.fillText(prestige > 0 ? `P${prestige} (${total.toLocaleString()})` : `P0`, 330, 383);
 
-  const dir = path.join(__dirname, "tmp"); await fs.ensureDir(dir);
-  const p = path.join(dir, `bal_${uid}.png`);
-  await fs.writeFile(p, canvas.toBuffer("image/png"));
-  return message.reply({ attachment: fs.createReadStream(p) });
+    const dir = path.join(__dirname, "tmp"); await fs.ensureDir(dir);
+    const p = path.join(dir, `bal_${uid}.png`);
+    await fs.writeFile(p, canvas.toBuffer("image/png"));
+    return message.reply({ attachment: fs.createReadStream(p) });
+  } catch (e) { console.log(e); return message.reply("Error: "+e.message); }
  }
 };
