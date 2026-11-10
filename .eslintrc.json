@@ -1,0 +1,33 @@
+{
+  "env": {
+    "commonjs": true,
+    "es2021": true,
+    "node": true
+  },
+  "extends": "eslint:recommended",
+  "parserOptions": {
+    "ecmaVersion": 2022
+  },
+  "rules": {
+    "no-prototype-builtins": "warn",
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "comma-dangle": ["warn", "never"],
+    "no-redeclare": "warn",
+    "prefer-const": "warn",
+    "no-useless-escape": "warn",
+    "no-mixed-spaces-and-tabs": "warn",
+    "semi": ["warn", "always"],
+    "no-useless-catch": "warn",
+    "no-empty": "warn",
+    "use-isnan": "warn",
+    "no-extra-semi": "warn",
+    "no-async-promise-executor": "warn",
+    "no-unreachable": "warn",
+    "no-var": "warn",
+    "no-fallthrough": "warn",
+    "no-console": "off",
+    "no-process-exit": "off",
+    "no-path-concat": "off"
+  },
+  "ignorePatterns": ["*.eta", "node_modules/", "dashboard/", "cache/", "backups/"]
+}
