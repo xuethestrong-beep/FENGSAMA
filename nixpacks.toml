@@ -1,5 +1,8 @@
 [phases.setup]
-nixPkgs = ["...", "pkg-config", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman", "python3"]
+nixPkgs = ["...", "pkg-config", "cairo", "pango", "libjpeg", "giflib", "librsvg", "pixman", "python3", "ffmpeg", "nodejs", "deno"]
 
 [phases.install]
-cmds = ["npm ci --include=optional || npm install"]
+cmds = ["npm ci --include=optional || npm install", "pip3 install -U yt-dlp --break-system-packages", "deno --version", "ffmpeg -version", "python3 -m yt_dlp --version"]
+
+[start]
+cmd = "npm start"
