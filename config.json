@@ -43,12 +43,12 @@
 			"email": "xxemperador0@gmail.com",
 			"clientId": "846346064980-kueggqdu4l0aa1nj0nourcni9lq5isi2.apps.googleusercontent.com",
 			"clientSecret": "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",
-			"refreshToken": "1//04IJsu0GsaeFaCgYIARAAGAQSNwF-L9Ir8TlZ4Puv5x0m1gGRL8TPU3h23Dzj6nci3nmHYdrdAI1cpLPI3huYK0nab6mYEj1oAos",
+			"refreshToken": "1//04ClEkPeA07esCgYIARAAGAQSNwF-L9IrvejDWDL1P1SSA4cMbZrYgcW1GTbJa9m7sDqYT9kdje1rHfuu52cvuEwibsrXNbhkId0",
 			"apiKey": ""
 		},
 		"gRecaptcha": {
-			"siteKey": "",
-			"secretKey": ""
+			"siteKey": "6Lfy0hguAAAAAIa-iT1F3dPDhyh8UHwUzF6XUKex",
+			"secretKey": "6Lfy0hguAAAAAMnfL2Ar7lNYSQxl3HC1r0-JNdEP"
 		}
 	},
 	"dashBoard": {
