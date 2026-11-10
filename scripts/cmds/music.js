@@ -1,100 +1,61 @@
-const { spawn } = require("child_process");
 const fs = require("fs-extra");
 const path = require("path");
-const axios = require("axios");
+const yts = require("yt-search");
+const ytdl = require("@distube/ytdl-core");
 
 module.exports = {
   config: {
     name: "music",
-    aliases: ["song","yt","play"],
-    version: "4.0-ytsearch",
+    aliases: ["song", "play"],
+    version: "5.2",
     author: "FENG",
     role: 0,
-    shortDescription: "YouTube music search",
-    longDescription: "Search YouTube and download mp3",
+    countDown: 10,
     category: "media",
-    guide: "{pn} <song name> - e.g. {pn} pagsamo"
+    description: "Search YouTube and send audio (yt-search only, max 10 min)",
+    guide: "{pn} <song>"
   },
-
-  onStart: async function({ api, event, args }) {
-    if (!args.length) return api.sendMessage("❌ Provide song name. Ex: !music pagsamo", event.threadID);
-
-    const query = args.join(" ");
+  onStart: async function ({ api, event, args }) {
     const tid = event.threadID;
-    const msgID = event.messageID;
-
-    const searching = await new Promise(res => {
-      api.sendMessage(`🔍 Searching YouTube for: "${query}"...`, tid, (err, info) => res(info), msgID);
-    });
-
+    const prefix = global.GoatBot?.config?.prefix || global.config?.prefix || "!";
+    if (!args.length) return api.sendMessage(`❌ Ex: ${prefix}music Arthur Nery`, tid);
+    const query = args.join(" ").slice(0, 200);
     const cacheDir = path.join(__dirname, "cache");
-    await fs.ensureDir(cacheDir);
-    const outputFile = path.join(cacheDir, `music_${Date.now()}.mp3`);
-    const cookiePath = path.join(cacheDir, "cookies.txt");
-
+    const filePath = path.join(cacheDir, `yt_${Date.now()}_${Math.floor(Math.random() * 1e6)}.mp3`);
+    let searching = null;
+    const cleanup = async () => { await fs.unlink(filePath).catch(() => {}); };
     try {
-      // Build yt-dlp args with ytsearch
-      const ytArgs = [
-        `ytsearch1:${query}`,
-        "-x", "--audio-format", "mp3",
-        "--audio-quality", "0",
-        "--no-playlist",
-        "--max-filesize", "25M",
-        "-o", outputFile,
-        "--no-warnings",
-        "--force-overwrites"
-      ];
-
-      // Use cookies if exists to avoid bot check
-      if (await fs.pathExists(cookiePath)) {
-        ytArgs.push("--cookies", cookiePath);
-      }
-
-      await new Promise((resolve, reject) => {
-        const ytdlp = spawn("yt-dlp", ytArgs);
-        let stderr = "";
-        ytdlp.stderr.on("data", d => stderr += d.toString());
-        ytdlp.on("close", code => {
-          if (code === 0) resolve();
-          else reject(new Error(stderr || `yt-dlp exit ${code}`));
-        });
-        ytdlp.on("error", err => reject(err));
+      await fs.ensureDir(cacheDir);
+      searching = await new Promise((res, rej) => api.sendMessage(`🔍 Searching YT: ${query}`, tid, (e, i) => e ? rej(e) : res(i))).catch(() => null);
+      const search = await Promise.race([
+        yts(query),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("Search timed out")), 15000))
+      ]);
+      if (!search.videos?.length) throw new Error("No results");
+      const video = search.videos[0];
+      if (video.isLive) throw new Error("Live videos not supported.");
+      if (!video.duration?.seconds || video.duration.seconds > 600) throw new Error("Too long (max 10 min)");
+      const stream = ytdl(video.url, { filter: "audioonly", quality: "highestaudio" });
+      const write = fs.createWriteStream(filePath);
+      await new Promise((res, rej) => {
+        const timer = setTimeout(() => { stream.destroy(); write.destroy(); rej(new Error("Download timed out")); }, 90000);
+        stream.on("error", (e) => { clearTimeout(timer); rej(e); });
+        write.on("error", (e) => { clearTimeout(timer); rej(e); });
+        write.on("finish", () => { clearTimeout(timer); res(); });
+        stream.pipe(write);
       });
-
-      // Check file exists and not too big
-      if (!(await fs.pathExists(outputFile))) throw new Error("Download failed");
-      const stat = await fs.stat(outputFile);
-      if (stat.size === 0) throw new Error("File empty");
-      if (stat.size > 26 * 1024 * 1024) {
-        await fs.unlink(outputFile).catch(()=>{});
-        throw new Error("File too large >25MB");
-      }
-
-      // Get title for message
-      let title = query;
-      try {
-        const infoArgs = [`ytsearch1:${query}`, "--get-title", "--no-playlist"];
-        if (await fs.pathExists(cookiePath)) infoArgs.push("--cookies", cookiePath);
-        const proc = spawn("yt-dlp", infoArgs);
-        let out = "";
-        proc.stdout.on("data", d => out += d.toString());
-        await new Promise(r => proc.on("close", r));
-        if (out.trim()) title = out.trim().split("\n")[0];
-      } catch {}
-
-      await api.unsendMessage(searching.messageID).catch(()=>{});
-      await api.sendMessage({
-        body: `🎵 ${title}`,
-        attachment: fs.createReadStream(outputFile)
-      }, tid, async () => {
-        await fs.unlink(outputFile).catch(()=>{});
-      }, msgID);
-
+      const stat = await fs.stat(filePath).catch(() => null);
+      if (!stat || stat.size < 1000) throw new Error("Download failed (empty file).");
+      if (stat.size > 25 * 1024 * 1024) throw new Error("Too big >25MB");
+      if (searching?.messageID) await api.unsendMessage(searching.messageID).catch(() => {});
+      searching = null;
+      await api.sendMessage({ body: `🎵 ${video.title}\n${video.url}`, attachment: fs.createReadStream(filePath) }, tid);
+      setTimeout(() => cleanup(), 5000);
     } catch (e) {
-      console.error("[music]", e.message);
-      await fs.unlink(outputFile).catch(()=>{});
-      await api.unsendMessage(searching.messageID).catch(()=>{});
-      api.sendMessage(`❌ Failed: ${e.message}\nTry another keyword or add cookies.txt to cache folder`, tid, msgID);
+      if (searching?.messageID) await api.unsendMessage(searching.messageID).catch(() => {});
+      await cleanup();
+      api.sendMessage(`❌ ${e.message}`, tid);
+      console.error("[MUSIC]", e.message);
     }
   }
 };
