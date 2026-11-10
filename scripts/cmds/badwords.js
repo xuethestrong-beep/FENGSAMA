@@ -1,246 +1,221 @@
-module.exports = {
-	config: {
-		name: "badwords",
-		aliases: ["badword"],
-		version: "1.4",
-		author: "NTKhang",
-		countDown: 5,
-		role: 1,
-		description: {
-			vi: "Bật/tắt/thêm/xóa cảnh báo vi phạm từ thô tục, nếu thành viên vi phạm sẽ bị cảnh báo, lần 2 sẽ kick khỏi box chat",
-			en: "Turn on/off/add/remove bad words warning, if a member violates, he will be warned, the second time he will be kicked out of the chat box"
-		},
-		category: "box chat",
-		guide: {
-			vi: "   {pn} add <words>: thêm từ cấm (có thể thêm nhiều từ cách nhau bằng dấu phẩy \",\" hoặc dấu gạch đứng \"|\""
-				+ "\n   {pn} delete <words>: xóa từ cấm (có thể xóa nhiều từ cách nhau bằng dấu phẩy \",\" hoặc dấu gạch đứng \"|\""
-				+ "\n   {pn} list <hide | để trống>: tắt cảnh báo (thêm \"hide\" để ẩn từ cấm)"
-				+ "\n   {pn} unwarn [<userID> | <@tag>]: xóa 1 lần cảnh báo của 1 thành viên"
-				+ "\n   {pn} on: tắt cảnh báo"
-				+ "\n   {pn} off: bật cảnh báo",
-			en: "   {pn} add <words>: add banned words (you can add multiple words separated by commas \",\" or vertical bars \"|\")"
-				+ "\n   {pn} delete <words>: delete banned words (you can delete multiple words separated by commas \",\" or vertical bars \"|\")"
-				+ "\n   {pn} list <hide | leave blank>: turn off warning (add \"hide\" to hide banned words)"
-				+ "\n   {pn} unwarn [<userID> | <@tag>]: remove 1 warning of 1 member"
-				+ "\n   {pn} on: turn off warning"
-				+ "\n   {pn} off: turn on warning"
-		}
-	},
-
-	langs: {
-		vi: {
-			onText: "bật",
-			offText: "tắt",
-			onlyAdmin: "⚠️ | Chỉ quản trị viên mới có thể thêm từ cấm vào danh sách",
-			missingWords: "⚠️ | Bạn chưa nhập từ cần cấm",
-			addedSuccess: "✅ | Đã thêm %1 từ cấm vào danh sách",
-			alreadyExist: "❌ | %1 từ cấm đã tồn tại trong danh sách từ trước: %2",
-			tooShort: "⚠️ | %1 từ cấm không thể thêm vào danh sách do có độ dài nhỏ hơn 2 ký tự: %2",
-			onlyAdmin2: "⚠️ | Chỉ quản trị viên mới có thể xóa từ cấm khỏi danh sách",
-			missingWords2: "⚠️ | Bạn chưa nhập từ cần xóa",
-			deletedSuccess: "✅ | Đã xóa %1 từ cấm khỏi danh sách",
-			notExist: "❌ | %1 từ cấm không tồn tại trong danh sách từ trước: %2",
-			emptyList: "⚠️ | Danh sách từ cấm trong nhóm bạn hiện đang trống",
-			badWordsList: "📑 | Danh sách từ cấm trong nhóm bạn: %1",
-			onlyAdmin3: "⚠️ | Chỉ quản trị viên mới có thể %1 tính năng này",
-			turnedOnOrOff: "✅ | Cảnh báo vi phạm từ cấm đã %1",
-			onlyAdmin4: "⚠️ | Chỉ quản trị viên mới có thể xóa cảnh báo vi phạm từ cấm",
-			missingTarget: "⚠️ | Bạn chưa nhập ID người dùng hoặc tag người dùng",
-			notWarned: "⚠️ | Người dùng %1 chưa bị cảnh báo vi phạm từ cấm",
-			removedWarn: "✅ | Người dùng %1 | %2 đã được xóa bỏ 1 lần cảnh báo vi phạm từ cấm",
-			warned: "⚠️ | Từ cấm \"%1\" đã được phát hiện trong tin nhắn của bạn, nếu tiếp tục vi phạm bạn sẽ bị kick khỏi nhóm.",
-			warned2: "⚠️ | Từ cấm \"%1\" đã được phát hiện trong tin nhắn của bạn, bạn đã vi phạm 2 lần và sẽ bị kick khỏi nhóm.",
-			needAdmin: "Bot cần quyền quản trị viên để kick thành viên bị ban",
-			unwarned: "✅ | Đã xóa bỏ cảnh báo vi phạm từ cấm của người dùng %1 | %2"
-		},
-		en: {
-			onText: "on",
-			offText: "off",
-			onlyAdmin: "⚠️ | Only admins can add banned words to the list",
-			missingWords: "⚠️ | You haven't entered the banned words",
-			addedSuccess: "✅ | Added %1 banned words to the list",
-			alreadyExist: "❌ | %1 banned words already exist in the list before: %2",
-			tooShort: "⚠️ | %1 banned words cannot be added to the list because they are shorter than 2 characters: %2",
-			onlyAdmin2: "⚠️ | Only admins can delete banned words from the list",
-			missingWords2: "⚠️ | You haven't entered the words to delete",
-			deletedSuccess: "✅ | Deleted %1 banned words from the list",
-			notExist: "❌ | %1 banned words do not exist in the list before: %2",
-			emptyList: "⚠️ | The list of banned words in your group is currently empty",
-			badWordsList: "📑 | The list of banned words in your group: %1",
-			onlyAdmin3: "⚠️ | Only admins can %1 this feature",
-			turnedOnOrOff: "✅ | Banned words warning has been %1",
-			onlyAdmin4: "⚠️ | Only admins can delete banned words warning",
-			missingTarget: "⚠️ | You haven't entered user ID or tagged user",
-			notWarned: "⚠️ | User %1 has not been warned for banned words",
-			removedWarn: "✅ | User %1 | %2 has been removed 1 banned words warning",
-			warned: "⚠️ | Banned words \"%1\" have been detected in your message, if you continue to violate you will be kicked from the group.",
-			warned2: "⚠️ | Banned words \"%1\" have been detected in your message, you have violated 2 times and will be kicked from the group.",
-			needAdmin: "Bot needs admin privileges to kick banned members",
-			unwarned: "✅ | Removed banned words warning of user %1 | %2"
-		}
-	},
-
-	onStart: async function ({ message, event, args, threadsData, usersData, role, getLang }) {
-		if (!await threadsData.get(event.threadID, "data.badWords"))
-			await threadsData.set(event.threadID, {
-				words: [],
-				violationUsers: {}
-			}, "data.badWords");
-
-		const badWords = await threadsData.get(event.threadID, "data.badWords.words", []);
-
-		switch (args[0]) {
-			case "add": {
-				if (role < 1)
-					return message.reply(getLang("onlyAdmin"));
-				const words = args.slice(1).join(" ").split(/[,|]/);
-				if (words.length === 0)
-					return message.reply(getLang("missingWords"));
-				const badWordsExist = [];
-				const success = [];
-				const failed = [];
-				for (const word of words) {
-					const oldIndex = badWords.indexOf(word);
-					if (oldIndex === -1) {
-						badWords.push(word);
-						success.push(word);
-					}
-					else if (oldIndex > -1) {
-						badWordsExist.push(word);
-					}
-					else
-						failed.push(word);
-				}
-				await threadsData.set(event.threadID, badWords, "data.badWords.words");
-				message.reply(
-					success.length > 0 ? getLang("addedSuccess", success.length) : ""
-						+ (badWordsExist.length > 0 ? getLang("alreadyExist", badWordsExist.length, badWordsExist.map(word => hideWord(word)).join(", ")) : "")
-						+ (failed.length > 0 ? getLang("tooShort", failed.length, failed.join(", ")) : "")
-				);
-				break;
-			}
-			case "delete":
-			case "del":
-			case "-d": {
-				if (role < 1)
-					return message.reply(getLang("onlyAdmin2"));
-				const words = args.slice(1).join(" ").split(/[,|]/);
-				if (words.length === 0)
-					return message.reply(getLang("missingWords2"));
-				const success = [];
-				const failed = [];
-				for (const word of words) {
-					const oldIndex = badWords.indexOf(word);
-					if (oldIndex > -1) {
-						badWords.splice(oldIndex, 1);
-						success.push(word);
-					}
-					else
-						failed.push(word);
-				}
-				await threadsData.set(event.threadID, badWords, "data.badWords.words");
-				message.reply(
-					(success.length > 0 ? getLang("deletedSuccess", success.length) : "")
-					+ (failed.length > 0 ? getLang("notExist", failed.length, failed.join(", ")) : "")
-				);
-				break;
-			}
-			case "list":
-			case "all":
-			case "-a": {
-				if (badWords.length === 0)
-					return message.reply(getLang("emptyList"));
-				message.reply(getLang("badWordsList", args[1] === "hide" ? badWords.map(word => hideWord(word)).join(", ") : badWords.join(", ")));
-				break;
-			}
-			case "on": {
-				if (role < 1)
-					return message.reply(getLang("onlyAdmin3", getLang("onText")));
-				await threadsData.set(event.threadID, true, "settings.badWords");
-				message.reply(getLang("turnedOnOrOff", getLang("onText")));
-				break;
-			}
-			case "off": {
-				if (role < 1)
-					return message.reply(getLang("onlyAdmin3", getLang("offText")));
-				await threadsData.set(event.threadID, false, "settings.badWords");
-				message.reply(getLang("turnedOnOrOff", getLang("offText")));
-				break;
-			}
-			case "unwarn": {
-				if (role < 1)
-					return message.reply(getLang("onlyAdmin4"));
-				let userID;
-				if (Object.keys(event.mentions)[0])
-					userID = Object.keys(event.mentions)[0];
-				else if (args[1])
-					userID = args[1];
-				else if (event.messageReply)
-					userID = event.messageReply.senderID;
-				if (isNaN(userID))
-					return message.reply(getLang("missingTarget"));
-				const violationUsers = await threadsData.get(event.threadID, "data.badWords.violationUsers", {});
-				if (!violationUsers[userID])
-					return message.reply(getLang("notWarned", userID));
-				violationUsers[userID]--;
-				await threadsData.set(event.threadID, violationUsers, "data.badWords.violationUsers");
-				const userName = await usersData.getName(userID);
-				message.reply(getLang("unwarned", userID, userName));
-			}
-		}
-	},
-
-	onChat: async function ({ message, event, api, threadsData, prefix, getLang }) {
-		if (!event.body)
-			return;
-		const threadData = global.db.allThreadData.find(t => t.threadID === event.threadID) || await threadsData.create(event.threadID);
-		const isEnabled = threadData.settings.badWords;
-		if (!isEnabled)
-			return;
-		const allAliases = [...(global.GoatBot.commands.get("badwords").config.aliases || []), ...(threadData.data.aliases?.["badwords"] || [])];
-		const isCommand = allAliases.some(a => event.body.startsWith(prefix + a));
-		if (isCommand)
-			return;
-		const badWordList = threadData.data.badWords?.words;
-		if (!badWordList || badWordList.length === 0)
-			return;
-		const violationUsers = threadData.data.badWords?.violationUsers || {};
-
-		for (const word of badWordList) {
-			if (event.body.match(new RegExp(`\\b${word}\\b`, "gi"))) {
-				if ((violationUsers[event.senderID] || 0) < 1) {
-					message.reply(getLang("warned", word));
-					violationUsers[event.senderID] = violationUsers[event.senderID] ? violationUsers[event.senderID] + 1 : 1;
-					await threadsData.set(event.threadID, violationUsers, "data.badWords.violationUsers");
-					return;
-				}
-				else {
-					await message.reply(getLang("warned2", word));
-					api.removeUserFromGroup(event.senderID, event.threadID, (err) => {
-						if (err)
-							return message.reply(getLang("needAdmin"), (e, info) => {
-								let { onEvent } = global.GoatBot;
-								onEvent.push({
-									messageID: info.messageID,
-									onStart: ({ event }) => {
-										if (event.logMessageType === "log:thread-admins" && event.logMessageData.ADMIN_EVENT == "add_admin") {
-											const { TARGET_ID } = event.logMessageData;
-											if (TARGET_ID == api.getCurrentUserID())
-												api.removeUserFromGroup(event.senderID, event.threadID, () => onEvent = onEvent.filter(item => item.messageID != info.messageID));
-										}
-									}
-								});
-							});
-					});
-				}
-			}
-		}
-	}
-};
-
+// Built-in badwords - auto detect
+const DEFAULT_BADWORDS = [
+  // English
+  "fuck", "shit", "bitch", "asshole", "bastard", "dick", "pussy", "nigga", "nigger",
+  // Tagalog
+  "gago", "tanga", "bobo", "inutil", "ulol", "gaga", "tarantado",
+  "pakyu", "pakshet", "putangina", "puta", "kantot", "shet",
+  "buwisit", "leche", "peste", "hayop", "pokpok"
+];
 
 function hideWord(str) {
-	return str.length == 2 ?
-		str[0] + "*" :
-		str[0] + "*".repeat(str.length - 2) + str[str.length - 1];
+  if (!str) return "";
+  if (str.length <= 1) return "*";
+  if (str.length === 2) return str[0] + "*";
+  return str[0] + "*".repeat(str.length - 2) + str[str.length - 1];
 }
+
+function normalizeText(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[0@]/g, "a")
+    .replace(/1!/g, "i")
+    .replace(/3/g, "e")
+    .replace(/4/g, "a")
+    .replace(/5\$/g, "s")
+    .replace(/\$/g, "s")
+    .replace(/7/g, "t")
+    .replace(/\+/g, "t")
+    .replace(/(.)\1{2,}/g, "$1")
+    .replace(/[^a-z0-9 ]/g, " ");
+}
+
+function findBadWord(message, wordList) {
+  const tokens = normalizeText(message).split(/\s+/).filter(Boolean);
+  const normalizedList = wordList.map(w => normalizeText(w));
+  for (const token of tokens) {
+    const idx = normalizedList.indexOf(token);
+    if (idx !== -1) return wordList[idx];
+  }
+  return null;
+}
+
+async function getSettings(threadsData, threadID) {
+  try {
+    const data = await threadsData.get(threadID, "badwords", null);
+    if (data && typeof data === "object") {
+      return {
+        enabled: data.enabled !== false,
+        custom: Array.isArray(data.custom) ? data.custom : [],
+        warnings: data.warnings && typeof data.warnings === "object" ? data.warnings : {}
+      };
+    }
+  } catch {}
+  return { enabled: true, custom: [], warnings: {} };
+}
+
+async function saveSettings(threadsData, threadID, settings) {
+  try { await threadsData.set(threadID, "badwords", settings); } catch {}
+}
+
+function getAllWords(settings) {
+  const seen = new Set();
+  const out = [];
+  for (const w of [...DEFAULT_BADWORDS, ...settings.custom]) {
+    const lower = String(w).toLowerCase().trim();
+    if (lower && !seen.has(lower)) { seen.add(lower); out.push(lower); }
+  }
+  return out;
+}
+
+module.exports = {
+  config: {
+    name: "badwords",
+    aliases: ["badword", "autobad"],
+    version: "2.1",
+    author: "FENG",
+    countDown: 3,
+    role: 1,
+    description: "Auto detect badwords without setup",
+    category: "box chat",
+    guide: "{pn} on/off - turn on/off\n{pn} list - show list\n{pn} add <words> - add more\n{pn} del <words> - delete\n{pn} unwarn @user - remove warning"
+  },
+
+  langs: {
+    en: {
+      turnedOn: "✅ | Auto badwords detection is ON - will auto detect %1 words",
+      turnedOff: "✅ | Auto badwords detection is OFF",
+      list: "📑 | Auto detecting %1 words: %2",
+      warned: "⚠️ | Bad word \"%1\" detected, 1st warning. Next time you will be kicked.",
+      warned2: "⚠️ | Bad word \"%1\" detected again, you violated 2 times and will be kicked.",
+      needAdmin: "Bot needs admin to kick.",
+      unwarned: "✅ | Removed warning of user %1 | %2",
+      notWarned: "⚠️ | User %1 has no warning",
+      missingTarget: "⚠️ | Tag or reply to user",
+      added: "✅ | Added %1 words",
+      deleted: "✅ | Deleted %1 words",
+      alreadyExists: "⚠️ | %1 already in list",
+      notFound: "⚠️ | %1 not found in list",
+      noWords: "⚠️ | Please provide words",
+      cannotKickAdmin: "⚠️ | Cannot kick a group admin."
+    }
+  },
+
+  onStart: async function ({ api, event, args, threadsData, getLang }) {
+    const { threadID, messageID, messageReply, mentions } = event;
+    const sub = String(args[0] || "").toLowerCase();
+    const settings = await getSettings(threadsData, threadID);
+
+    if (sub === "on") {
+      settings.enabled = true;
+      await saveSettings(threadsData, threadID, settings);
+      return api.sendMessage(getLang("turnedOn", getAllWords(settings).length), threadID, messageID);
+    }
+
+    if (sub === "off") {
+      settings.enabled = false;
+      await saveSettings(threadsData, threadID, settings);
+      return api.sendMessage(getLang("turnedOff"), threadID, messageID);
+    }
+
+    if (sub === "list") {
+      const words = getAllWords(settings).map(hideWord);
+      return api.sendMessage(getLang("list", words.length, words.join(", ")), threadID, messageID);
+    }
+
+    if (sub === "add" || sub === "del") {
+      const raw = args.slice(1).join(" ").split(/[\s,]+/).map(s => s.toLowerCase().trim()).filter(Boolean);
+      if (!raw.length) return api.sendMessage(getLang("noWords"), threadID, messageID);
+
+      if (sub === "add") {
+        const added = [];
+        for (const w of raw) {
+          if (getAllWords(settings).includes(w)) continue;
+          if (DEFAULT_BADWORDS.includes(w)) continue;
+          settings.custom.push(w);
+          added.push(hideWord(w));
+        }
+        await saveSettings(threadsData, threadID, settings);
+        if (!added.length) return api.sendMessage(getLang("alreadyExists", raw.map(hideWord).join(", ")), threadID, messageID);
+        return api.sendMessage(getLang("added", added.join(", ")), threadID, messageID);
+      }
+
+      const removed = [];
+      for (const w of raw) {
+        const idx = settings.custom.indexOf(w);
+        if (idx !== -1) { settings.custom.splice(idx, 1); removed.push(hideWord(w)); }
+      }
+      await saveSettings(threadsData, threadID, settings);
+      if (!removed.length) return api.sendMessage(getLang("notFound", raw.map(hideWord).join(", ")), threadID, messageID);
+      return api.sendMessage(getLang("deleted", removed.join(", ")), threadID, messageID);
+    }
+
+    if (sub === "unwarn") {
+      let targetID = null;
+      let targetName = "";
+      if (messageReply) {
+        targetID = messageReply.senderID;
+        targetName = messageReply.senderID;
+      } else if (mentions && Object.keys(mentions).length) {
+        targetID = Object.keys(mentions)[0];
+        targetName = mentions[targetID];
+      }
+      if (!targetID) return api.sendMessage(getLang("missingTarget"), threadID, messageID);
+      if (!settings.warnings[targetID]) return api.sendMessage(getLang("notWarned", targetName), threadID, messageID);
+      delete settings.warnings[targetID];
+      await saveSettings(threadsData, threadID, settings);
+      return api.sendMessage(getLang("unwarned", targetName, targetID), threadID, messageID);
+    }
+
+    return api.sendMessage(
+      `Usage:\n${this.config.guide.replaceAll("{pn}", "badwords")}`,
+      threadID, messageID
+    );
+  },
+
+  onChat: async function ({ api, event, threadsData, getLang }) {
+    const { threadID, messageID, senderID, body } = event;
+    if (!body || !threadID || !senderID) return;
+    if (String(senderID) === String(api.getCurrentUserID())) return;
+
+    const settings = await getSettings(threadsData, threadID);
+    if (!settings.enabled) return;
+
+    const found = findBadWord(body, getAllWords(settings));
+    if (!found) return;
+
+    let threadInfo;
+    try { threadInfo = await api.getThreadInfo(threadID); } catch { return; }
+    const adminIDs = (threadInfo.adminIDs || []).map(a => String(a.id));
+    const botID = String(api.getCurrentUserID());
+    const isBotAdmin = adminIDs.includes(botID);
+    const isSenderAdmin = adminIDs.includes(String(senderID));
+
+    // Never warn/kick group admins, just skip to avoid failed kick spam
+    if (isSenderAdmin) return;
+
+    const count = (settings.warnings[senderID] || 0) + 1;
+    settings.warnings[senderID] = count;
+    await saveSettings(threadsData, threadID, settings);
+
+    const censored = hideWord(found);
+
+    if (count === 1) {
+      return api.sendMessage(getLang("warned", censored), threadID, messageID);
+    }
+
+    // 2nd offense = kick
+    if (!isBotAdmin) {
+      return api.sendMessage(getLang("needAdmin"), threadID, messageID);
+    }
+
+    try {
+      await api.sendMessage(getLang("warned2", censored), threadID, messageID);
+      await api.removeUserFromGroup(senderID, threadID);
+      delete settings.warnings[senderID];
+      await saveSettings(threadsData, threadID, settings);
+    } catch {
+      return api.sendMessage(getLang("needAdmin"), threadID, messageID);
+    }
+  }
+};
