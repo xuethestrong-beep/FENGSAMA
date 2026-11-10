@@ -4,20 +4,18 @@ const crypto = require("crypto");
 const { execFile } = require("child_process");
 const util = require("util");
 const execFileAsync = util.promisify(execFile);
-const MAX_SIZE = 25 * 1024 * 1024;
 
 module.exports = {
-  config: { name: "music", version: "5.4", author: "FENG", countDown: 15, role: 0, description: "Search and download music", category: "media", guide: "{pn} <song name>" },
+  config: { name: "music", version: "5.6-debug", author: "FENG", countDown: 15, role: 0, category: "media" },
   onStart: async function ({ message, args, event, api }) {
-    if (!args[0]) return message.reply("🎵 Usage: !music <song name>");
-    const query = args.join(" ").trim().slice(0, 100);
+    if (!args[0]) return message.reply("!music <name>");
+    const query = args.join(" ").trim();
 
     let searchingID = null;
     try {
       const info = await message.reply(`🎧 Searching: ${query}`);
-      searchingID = info?.messageID || info?.messageID || null;
+      searchingID = info.messageID;
     } catch {}
-    try { await api.setMessageReaction("🔍", event.messageID, () => {}, true); } catch {}
 
     const cacheDir = path.join(__dirname, "cache");
     const baseName = `m_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
@@ -26,33 +24,39 @@ module.exports = {
 
     try {
       await fs.ensureDir(cacheDir);
-      const ytdlpArgs = ["-m", "yt_dlp", "--extractor-args", "youtube:player_client=android,ios", "-f", "bestaudio[ext=m4a]/bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "5", "--match-filter", "duration < 600", "-o", `${base}.%(ext)s`, `ytsearch1:${query}`, "--no-playlist", "--quiet", "--no-warnings", "--no-cache-dir"];
+      const ytdlpArgs = ["-m", "yt_dlp", "--extractor-args", "youtube:player_client=android,mweb", "--js-runtimes", "deno,node", "-f", "bestaudio/best", "-x", "--audio-format", "mp3", "--audio-quality", "5", "-o", `${base}.%(ext)s`, `ytsearch1:${query}`, "--no-playlist", "--quiet"];
+
       if (process.env.YT_COOKIE) {
         await fs.writeFile(cookiePath, process.env.YT_COOKIE.replace(/\\n/g, "\n"));
         ytdlpArgs.push("--cookies", cookiePath);
       }
-      try { await execFileAsync("python3", ytdlpArgs, { timeout: 120000 }); } 
-      catch { await execFileAsync("python", ytdlpArgs, { timeout: 120000 }); }
 
+      const { stdout, stderr } = await execFileAsync("python3", ytdlpArgs, { timeout: 90000, maxBuffer: 10*1024*1024 });
+      
       const files = await fs.readdir(cacheDir);
       const found = files.find(f => f.startsWith(baseName));
-      if (!found) throw new Error("NO_FILE");
-      const finalFile = path.join(cacheDir, found);
-      const stat = await fs.stat(finalFile);
-      if (stat.size > MAX_SIZE) throw new Error("TOO_BIG");
+      if (!found) throw new Error(`NO_FILE - yt-dlp said: ${stderr || stdout || "nothing"}`);
 
-      // DELETE SEARCHING MESSAGE
+      const finalFile = path.join(cacheDir, found);
+      // Delete searching BEFORE send
       if (searchingID) await api.unsendMessage(searchingID).catch(()=>{});
-      
-      try { await api.setMessageReaction("✅", event.messageID, ()=>{}, true); } catch {}
+      searchingID = null; // mark deleted
+
       await message.reply({ body: `🎵 ${query}`, attachment: fs.createReadStream(finalFile) });
+      await fs.remove(finalFile).catch(()=>{});
 
     } catch (e) {
-      if (searchingID) await api.unsendMessage(searchingID).catch(()=>{});
-      try { await api.setMessageReaction("❌", event.messageID, ()=>{}, true); } catch {}
-      if (e.message==="TOO_BIG") return message.reply("❌ Too big (>25MB)");
-      if (e.message==="NO_FILE") return message.reply("❌ Not found");
-      return message.reply(`❌ Failed: ${String(e.message).slice(0,150)}`);
+      console.error("[MUSIC-ERR]", e);
+      const errMsg = String(e.message || e).slice(0, 400);
+      if (searchingID) {
+        // Edit searching to show error instead of deleting
+        await api.editMessage?.(`❌ Failed: ${errMsg}`, searchingID).catch(async ()=>{
+          await api.unsendMessage(searchingID).catch(()=>{});
+          await message.reply(`❌ Failed: ${errMsg}`);
+        });
+      } else {
+        await message.reply(`❌ Failed: ${errMsg}`);
+      }
     } finally {
       try { const all = await fs.readdir(cacheDir); for (const f of all) if (f.startsWith(baseName)) await fs.remove(path.join(cacheDir, f)).catch(()=>{}); } catch {}
     }
