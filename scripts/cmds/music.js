@@ -1,10 +1,9 @@
 const fs = require("fs-extra");
 const path = require("path");
-const yts = require("yt-search");
 const play = require("play-dl");
 
 module.exports = {
-  config: { name: "music", aliases: ["song","play"], version: "5.6-railway-cookie", author: "FENG", role: 0, countDown: 15, category: "media", guide: "{pn} <song>" },
+  config: { name: "music", aliases: ["song","play"], version: "5.7-fixed", author: "FENG", role: 0, countDown: 15, category: "media", guide: "{pn} <song>" },
   onStart: async function ({ api, event, args }) {
     const tid = event.threadID;
     if (!args.length) return api.sendMessage("❌ Ex: music Arthur Nery", tid);
@@ -15,33 +14,21 @@ module.exports = {
     try{
       await fs.ensureDir(cacheDir);
       searching = await new Promise(r=>api.sendMessage(`🔍 Searching: ${query}`, tid, (e,i)=>r(i)));
-      
-      // READ FROM RAILWAY VARIABLE
+
       let cookieHeader = process.env.YT_COOKIE || process.env.YT_COOKIES || process.env.COOKIE || "";
-      
-      // If variable is file path, read it. If it's raw cookie string, use directly.
-      if (cookieHeader && cookieHeader.length < 300 && cookieHeader.includes(".txt")) {
-        try { 
-          const raw = await fs.readFile(cookieHeader, "utf8");
-          cookieHeader = raw.split("\n").filter(l=>l.trim()&&!l.startsWith("#")).map(l=>{const p=l.split("\t"); return p[5]&&p[6]?`${p[5].trim()}=${p[6].trim()}`:null;}).filter(Boolean).join("; ");
-        } catch {}
-      } else if (cookieHeader.includes("\t")) {
-        // Netscape format pasted in variable
+      cookieHeader = cookieHeader.replace(/\\n/g, "\n");
+      if (cookieHeader.includes("\t")) {
         cookieHeader = cookieHeader.split("\n").filter(l=>l.trim()&&!l.startsWith("#")).map(l=>{const p=l.split("\t"); return p[5]&&p[6]?`${p[5].trim()}=${p[6].trim()}`:null;}).filter(Boolean).join("; ");
       }
       
-      console.log("[MUSIC] YT_COOKIE exists:", !!cookieHeader, "len:", cookieHeader.length);
-      
-      if (cookieHeader) {
-        await play.setToken({ youtube: { cookie: cookieHeader } }).catch(e=>console.log("setToken fail", e.message));
-      } else {
-        throw new Error("YT_COOKIE not found in Railway Variables");
-      }
+      if (!cookieHeader) throw new Error("YT_COOKIE not found");
+      await play.setToken({ youtube: { cookie: cookieHeader } }).catch(()=>{});
 
-      const search = await yts(query);
-      if (!search.videos?.length) throw new Error("No results");
-      const video = search.videos[0];
-      if (video.duration.seconds > 600) throw new Error("Max 10min");
+      // FIX: use play-dl search not yts (yts is blocked on Railway)
+      const searched = await play.search(query, { limit: 1, source: { youtube: "video" } });
+      if (!searched?.length) throw new Error("No results - try other keyword");
+      const video = searched[0];
+      if (video.durationInSec > 600) throw new Error("Max 10min");
 
       const info = await play.video_info(video.url);
       const stream = await play.stream_from_info(info);
@@ -51,12 +38,9 @@ module.exports = {
         stream.stream.pipe(ws);
         ws.on("finish", res); 
         ws.on("error", rej);
-        setTimeout(()=>rej(new Error("Timeout 90s")), 90000);
+        setTimeout(()=>rej(new Error("Timeout")), 90000);
       });
 
-      const stat = await fs.stat(filePath);
-      if (stat.size < 1000) throw new Error("Empty file");
-      
       if (searching?.messageID) await api.unsendMessage(searching.messageID).catch(()=>{});
       await api.sendMessage({ body:`🎵 ${video.title}`, attachment: fs.createReadStream(filePath) }, tid, ()=>fs.unlink(filePath).catch(()=>{}));
     }catch(e){
