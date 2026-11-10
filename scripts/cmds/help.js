@@ -1,94 +1,76 @@
 module.exports = {
   config: {
     name: "help",
-    version: "2.6 FENG !",
+    version: "2.9",
     author: "FENG",
     countDown: 3,
     role: 0,
     shortDescription: "Help with ! prefix",
-    longDescription: "Categorized help menu for ! prefix",
+    longDescription: "Categorized help menu",
     category: "info",
-    guide: "!help [category/command]"
+    guide: "{pn} [category/command]"
   },
-
-  onStart: async function ({ message, args, event }) {
-    const prefix = "!"; // FORCE ! PREFIX
-    const allCmds = [];
-    const cmds = global.GoatBot.commands;
-    
-    for (const cmd of cmds.values()) {
-      if (cmd.config?.name) allCmds.push(cmd.config);
+  onStart: async function ({ message, args, event, threadsData }) {
+    try {
+      const prefix = global.GoatBot?.config?.prefix || "!";
+      const cmds = global.GoatBot.commands;
+      const senderID = String(event.senderID);
+      const threadID = event.threadID;
+      let userRole = 0;
+      const botAdmins = global.GoatBot?.config?.adminBot || [];
+      if (botAdmins.some(a => String(a) === senderID)) userRole = 2;
+      else if (threadID) {
+        const threadData = await threadsData.get(threadID).catch(() => null);
+        const adminIDs = threadData?.adminIDs || [];
+        if (adminIDs.some(a => String(a) === senderID)) userRole = 1;
+      }
+      const roleNames = { 0: "Everyone", 1: "Group Admin", 2: "Bot Admin" };
+      const allCmds = [];
+      const aliasMap = new Map();
+      for (const cmd of cmds.values()) {
+        if (!cmd.config?.name) continue;
+        if ((cmd.config.role || 0) > userRole) continue;
+        allCmds.push(cmd.config);
+        const aliases = cmd.config.aliases || [];
+        for (const al of aliases) aliasMap.set(String(al).toLowerCase(), String(cmd.config.name).toLowerCase());
+      }
+      const icons = { economy: "💰 ECONOMY", media: "🎬 MEDIA", fun: "🎮 FUN", box: "📦 BOX", group: "👥 GROUP", events: "⚡ EVENTS", info: "ℹ️ INFO", owner: "👑 OWNER", utility: "🔧 UTILITY", game: "🎲 GAME", rank: "📊 RANK" };
+      const categories = {};
+      allCmds.forEach(c => {
+        const cat = String(c.category || "general").toLowerCase();
+        if (!categories[cat]) categories[cat] = [];
+        categories[cat].push(c.name);
+      });
+      for (const list of Object.values(categories)) list.sort();
+      const input = String(args.join(" ") || "").toLowerCase().trim();
+      const resolved = aliasMap.get(input) || input;
+      if (resolved && cmds.has(resolved)) {
+        const cfg = cmds.get(resolved).config;
+        if ((cfg.role || 0) > userRole) return message.reply("❌ You don't have permission to view this command.");
+        const guideRaw = cfg.guide || `${prefix}${cfg.name}`;
+        const guideText = String(guideRaw).replace(/{pn}/g, prefix + cfg.name).replace(/{p}/g, prefix);
+        const desc = cfg.description || cfg.shortDescription || cfg.longDescription || "No description";
+        return message.reply(`╭─ ${String(cfg.name).toUpperCase()} ─╮\n│ Name: ${prefix}${cfg.name}\n│ Category: ${cfg.category}\n│ Role: ${roleNames[cfg.role || 0] || cfg.role}\n│ Desc: ${desc}\n│ Guide: ${guideText}\n╰──────────────╯`);
+      }
+      if (input && categories[input]) {
+        const list = categories[input].map(n => `│ ✦ ${prefix}${n}`).join("\n");
+        return message.reply(`╭─ ${icons[input] || input.toUpperCase()} ─╮\n${list}\n╰──────────────╯\n\nTotal: ${categories[input].length} cmds\nUse ${prefix}help [cmd] for info`);
+      }
+      let msg = `╭─ FENG BOT MENU ─╮\n│ Prefix: ${prefix}\n│ Commands: ${allCmds.length}\n╰──────────────╯\n\n`;
+      for (const [cat, list] of Object.entries(categories).sort()) {
+        const icon = icons[cat] || `📌 ${cat.toUpperCase()}`;
+        msg += `╭─ ${icon} [${list.length}] ─╮\n`;
+        const preview = list.slice(0, 6).map(n => `${prefix}${n}`).join(", ");
+        const more = list.length > 6 ? ` +${list.length - 6}` : "";
+        msg += `│ ${preview}${more}\n╰──────────────╯\n`;
+      }
+      msg += `\n📌 USAGE:\n`;
+      for (const cat of Object.keys(categories).sort()) msg += `${prefix}help ${cat}\n`;
+      msg += `${prefix}help [command]`;
+      return message.reply(msg);
+    } catch (err) {
+      console.error(" Error:", err.message, err.stack);
+      return message.reply(`❌ Help error: ${err.message}\nCheck console`);
     }
-
-    const icons = {
-      economy: "💰 ECONOMY",
-      media: "🎬 MEDIA", 
-      fun: "🎮 FUN",
-      box: "📦 BOX",
-      group: "👥 GROUP",
-      events: "⚡ EVENTS",
-      info: "ℹ️ INFO",
-      owner: "👑 OWNER",
-      utility: "🔧 UTILITY",
-      game: "🎲 GAME",
-      rank: "📊 RANK"
-    };
-
-    const categories = {};
-    allCmds.forEach(c => {
-      const cat = (c.category || "general").toLowerCase();
-      if (!categories[cat]) categories[cat] = [];
-      categories[cat].push(c.name);
-    });
-
-    const input = (args[0] || "").toLowerCase();
-
-    // Single command info
-    if (input && cmds.has(input)) {
-      const cfg = cmds.get(input).config;
-      return message.reply(
-        `╭─ ${cfg.name.toUpperCase()} ─╮\n` +
-        `│ Name: ${prefix}${cfg.name}\n` +
-        `│ Category: ${cfg.category}\n` +
-        `│ Role: ${cfg.role}\n` +
-        `│ Desc: ${cfg.description || cfg.shortDescription}\n` +
-        `│ Guide: ${(cfg.guide || "").replaceAll("{pn}", prefix + cfg.name)}\n` +
-        `╰──────────────╯`
-      );
-    }
-
-    // Category view
-    if (input && categories[input]) {
-      const list = categories[input].sort().map(n => `│ ✦ ${prefix}${n}`).join("\n");
-      return message.reply(
-        `╭─ ${icons[input] || input.toUpperCase()} ─╮\n` +
-        `${list}\n` +
-        `╰──────────────╯\n\nTotal: ${categories[input].length} cmds\nUse ${prefix}help [cmd] for info`
-      );
-    }
-
-    // Main menu
-    let msg = `╭─ FENG BOT MENU ─╮\n`;
-    msg += `│ Prefix: ${prefix}\n`;
-    msg += `│ Commands: ${allCmds.length}\n`;
-    msg += `╰──────────────╯\n\n`;
-
-    for (const [cat, list] of Object.entries(categories).sort()) {
-      const icon = icons[cat] || `📌 ${cat.toUpperCase()}`;
-      msg += `╭─ ${icon} [${list.length}] ─╮\n`;
-      const preview = list.sort().slice(0, 6).map(n => `${prefix}${n}`).join(", ");
-      const more = list.length > 6 ? ` +${list.length - 6}` : "";
-      msg += `│ ${preview}${more}\n`;
-      msg += `╰──────────────╯\n`;
-    }
-
-    msg += `\n📌 USAGE:\n`;
-    msg += `!help economy\n`;
-    msg += `!help media\n`;
-    msg += `!help fun\n`;
-    msg += `!help box\n`;
-    msg += `!help goodbye`;
-
-    return message.reply(msg);
   }
 };
