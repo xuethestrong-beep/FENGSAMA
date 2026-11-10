@@ -1,3 +1,12 @@
+console.log("=== FENGSAMA STARTING ===");
+console.log("Node version:", process.version);
+try {
+  const acc = require('fs').readFileSync('./account.txt','utf8');
+  console.log("account.txt length:", acc.length);
+  console.log("account.txt first 200 chars:", acc.substring(0,200));
+} catch(e) {
+  console.log("FAILED TO READ account.txt:", e.message);
+}
 const { spawn, execSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
