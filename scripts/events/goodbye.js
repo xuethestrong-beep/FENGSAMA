@@ -1,58 +1,62 @@
 const fs = require("fs");
 const path = require("path");
+const { getTime } = global.utils;
+
 module.exports = {
   config: {
     name: "goodbye",
-    version: "2.4 NO TEXT",
+    version: "3.1 ALWAYS ON",
     author: "FENG",
-    countDown: 3,
-    role: 1,
-    description: "Goodbye video only when someone leaves or gets kicked",
-    category: "events",
-    guide: "{pn} on\n{pn} off"
+    category: "events"
   },
-  onStart: async function ({ message, event, args, threadsData }) {
-    try {
-      const threadID = event.threadID;
-      const data = await threadsData.get(threadID) || {};
-      const settings = data.settings || {};
-      const type = (args?.[0] || "").toLowerCase();
-      if (!["on", "off"].includes(type)) {
-        return message.reply(`👋 GOODBYE: ${settings.goodbye ? "ON ✅" : "OFF ❌"}\n\ngoodbye on/off`);
-      }
-      settings.goodbye = type === "on";
-      await threadsData.set(threadID, { ...data, settings });
-      return message.reply(type === "on" ? "✅ Goodbye ON (video only)" : "❌ Goodbye OFF");
-    } catch (e) {
-      console.error("[GOODBYE] onStart", e.message);
-      return message.reply("❌ Failed");
+
+  langs: {
+    en: {
+      session1: "morning",
+      session2: "noon",
+      session3: "afternoon",
+      session4: "evening",
+      leaveType1: "left",
+      leaveType2: "was kicked from",
+      defaultLeaveMessage: "{userName} {type} the group - GOODBYE"
     }
   },
-  onEvent: async function ({ event, api, threadsData }) {
+
+  onStart: async function () {}, // No command, always on
+
+  onEvent: async function ({ event, api, threadsData, usersData, getLang }) {
     try {
       if (event.logMessageType !== "log:unsubscribe") return;
+
       const threadID = event.threadID;
-      const data = await threadsData.get(threadID) || {};
-      if (!data.settings?.goodbye) return;
       const leftID = event.logMessageData?.leftParticipantFbId;
       if (!leftID || String(leftID) === String(api.getCurrentUserID())) return;
+
+      const threadData = await threadsData.get(threadID) || {};
+      const threadName = threadData.threadName || "group";
+      const hours = getTime("HH");
+      const userName = await usersData.getName(leftID).catch(() => "Someone");
+
+      const isKick = String(event.author) !== String(leftID);
+      let msg = getLang("defaultLeaveMessage")
+        .replace(/\{userName\}/g, userName)
+        .replace(/\{type\}/g, isKick ? getLang("leaveType2") : getLang("leaveType1"))
+        .replace(/\{threadName\}|\{boxName\}/g, threadName)
+        .replace(/\{time\}/g, hours)
+        .replace(/\{session\}/g, hours <= 10 ? getLang("session1") : hours <= 12 ? getLang("session2") : hours <= 18 ? getLang("session3") : getLang("session4"));
+
+      const form = { body: msg };
 
       const videoPath = path.join(__dirname, "cache", "goodbye.mp4");
       const imagePath = path.join(__dirname, "cache", "goodbye.jpg");
 
-      setTimeout(async () => {
-        try {
-          let attachment = null;
-          if (fs.existsSync(videoPath)) attachment = fs.createReadStream(videoPath);
-          else if (fs.existsSync(imagePath)) attachment = fs.createReadStream(imagePath);
-          if (!attachment) return;
-          await api.sendMessage({ attachment }, threadID);
-        } catch (e) {
-          console.error("[GOODBYE] Send Error:", e.message);
-        }
-      }, 500);
+      if (fs.existsSync(videoPath)) form.attachment = fs.createReadStream(videoPath);
+      else if (fs.existsSync(imagePath)) form.attachment = fs.createReadStream(imagePath);
+
+      setTimeout(() => api.sendMessage(form, threadID), 800);
+
     } catch (e) {
-      console.error("[GOODBYE] onEvent", e.message);
+      console.error("[GOODBYE]", e.message);
     }
   }
 };
