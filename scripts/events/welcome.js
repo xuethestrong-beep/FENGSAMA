@@ -4,7 +4,7 @@ const path = require("path");
 if (!global.temp.welcomeEvent) global.temp.welcomeEvent = {};
 
 module.exports = {
-  config: { name: "welcome", version: "3.2-no-link", author: "FENG", category: "events" },
+  config: { name: "welcome", version: "3.3-pic", author: "FENG", category: "events" },
   langs: {
     en: {
       botAdded: "%1 Connected successfully!",
@@ -42,28 +42,30 @@ module.exports = {
         for (let idx = 0; idx < participants.length; idx++) {
           const p = participants[idx];
           if (p.userFbId == api.getCurrentUserID()) continue;
-          const name = (p.fullName || "Member").replace("@", "");
-          nameArray.push(name);
-          mentions.push({ tag: name, id: p.userFbId, fromIndex: 0 });
+          nameArray.push((p.fullName || "Member").replace("@", ""));
+          mentions.push({ tag: nameArray[nameArray.length-1], id: p.userFbId, fromIndex: 0 });
           memberNumbers.push(totalMembers - participants.length + idx + 1);
         }
         if (!nameArray.length) return;
 
-        const customMsg = threadData.data?.welcomeMessage;
-        const msg = (customMsg || getLang("welcomeMessage"))
+        const msg = (threadData.data?.welcomeMessage || getLang("welcomeMessage"))
           .replace(/\{uName\}/g, nameArray.join(", "))
           .replace(/\{soThanhVien\}/g, memberNumbers.join(", "))
           .replace(/\{threadName\}/g, threadName);
 
+        // AUTO-DETECT your welcome pic/vid
         const cacheDir = path.join(__dirname, "../cmds/cache");
         const eventCacheDir = path.join(__dirname, "cache");
-        const localPaths = [
-          path.join(eventCacheDir, "welcome.mp4"),
-          path.join(cacheDir, "welcome.mp4"),
-          path.join(cacheDir, "welcome.gif"),
-        ];
+        const names = ["welcome.jpg","welcome.jpeg","welcome.png","welcome.webp","welcome.gif","welcome.mp4","welcome.jpg","welcome.JPG","welcome.PNG"];
+        const dirs = [eventCacheDir, cacheDir];
         let localFile = null;
-        for (const lp of localPaths) if (await fs.pathExists(lp)) { localFile = lp; break; }
+        for (const dir of dirs) {
+          for (const n of names) {
+            const full = path.join(dir, n);
+            if (await fs.pathExists(full)) { localFile = full; break; }
+          }
+          if (localFile) break;
+        }
 
         if (localFile) {
           await api.sendMessage({ body: msg, attachment: fs.createReadStream(localFile), mentions }, threadID);
