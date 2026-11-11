@@ -1,342 +1,46 @@
-const realms = ["Mortal", "Qi Condensation", "Foundation", "Golden Core", "Nascent Soul", "Soul Formation", "Void Refinement", "Great Ascension", "Immortal"];
-const realmPower = [10, 50, 200, 800, 3200, 12000, 50000, 200000, 1000000];
-const artifacts = { "wooden sword": { power: 20, price: 100 }, "spirit sword": { power: 150, price: 500 }, "dragon blade": { power: 800, price: 3000 }, "immortal relic": { power: 5000, price: 20000 } };
-const pets = { "fox": { power: 100, price: 500 }, "phoenix": { power: 800, price: 5000 }, "kirin": { power: 5000, price: 25000 } };
-const pills = { "qi pill": { qi: 50 }, "dragon pill": { qi: 200 } };
-const beasts = [{ name: "Rabbit", power: 30, reward: 20 }, { name: "Wolf", power: 150, reward: 60 }, { name: "Tiger", power: 600, reward: 200 }, { name: "Serpent", power: 2500, reward: 800 }, { name: "Dragon", power: 15000, reward: 5000 }];
-const HUNT_CD = 30000;
-const DUNGEON_CD = 300000;
-const DUNGEON_COST = 100;
-const DUNGEON_REQ = 500;
-const DUNGEON_REWARD = 500;
-const DUEL_CD = 60000;
-
-function isAdmin(senderID) {
-  const admins = global.GoatBot?.config?.adminBot || global.config?.adminBot || [];
-  return Array.isArray(admins) && admins.map(String).includes(String(senderID));
+const R=["Mortal","Qi","Foundation","Golden","Nascent","Soul","Void","Ascension","Earth","Heaven","King","Emperor","God","Supreme","Dao","Transcendent"],P=[10,50,200,800,3200,12000,50000,200e3,800e3,2500000,8000000,25e6,80e6,250e6,1e9,5e9],E=["👶","💨","🏔️","💛","👶","👻","🌌","🚀","🌍","☁️","👑","👑","⚡","💫","☯️","♾️"],A={wooden:20,iron:80,spirit:250,flame:600,dragon:1500,heaven:4000,relic:10000,slayer:30000,dao:1e5,chaos:350e3,void:800e3,eternity:2e6},AP={wooden:100,iron:300,spirit:800,flame:2500,dragon:7000,heaven:20e3,relic:60e3,slayer:200e3,dao:800e3,chaos:3e6,void:7e6,eternity:20e6},PT={fox:100,wolf:300,tiger:800,phoenix:2000,kirin:6000,dragon:18000,tortoise:45000,ninetail:120e3,chaos:400e3,serpent:900e3,qilin:2500000},PP={fox:500,wolf:1500,tiger:4000,phoenix:12e3,kirin:35e3,dragon:1e5,tortoise:280e3,ninetail:800e3,chaos:3500000,serpent:8e6,qilin:25e6},PE={fox:{s:2e3,i:"spirit pill",q:3,t:"wolf"},wolf:{s:5e3,i:"dragon pill",q:3,t:"tiger"},tiger:{s:15e3,i:"phoenix pill",q:3,t:"phoenix"},phoenix:{s:4e4,i:"immortal pill",q:3,t:"kirin"},kirin:{s:12e4,i:"god pill",q:3,t:"dragon"},dragon:{s:3e5,i:"chaos pill",q:2,t:"ninetail"},ninetail:{s:1e6,i:"dao pill",q:2,t:"chaos"},chaos:{s:3e6,i:"dao pill",q:5,t:"serpent"},serpent:{s:8e6,i:"dao pill",q:10,t:"qilin"}},PL={qi:80,spirit:250,dragon:800,phoenix:2e3,immortal:5e3,god:15e3,chaos:5e4,dao:150e3},BE=[{n:"Rabbit",p:30,r:20,d:"qi pill"},{n:"Wolf",p:180,r:70,d:"spirit pill"},{n:"Tiger",p:700,r:250,d:"dragon pill"},{n:"Dragon",p:15e3,r:5e3,d:"immortal pill"},{n:"Void",p:80e3,r:2e4,d:"god pill"},{n:"Demon",p:250e3,r:6e4,d:"chaos pill"}],DU={mortal:{q:100,c:50,r:200},spirit:{q:1e3,c:200,r:800},dragon:{q:1e4,c:1e3,r:5e3},immortal:{q:1e5,c:5e3,r:3e4},god:{q:1e6,c:2e4,r:150e3}},TI={worm:{p:0,pr:0},fighter:{p:20,pr:500},warrior:{p:80,pr:2e3},demon:{p:200,pr:5e3},saint:{p:200,pr:5e3},dragon:{p:600,pr:15e3},sword:{p:1500,pr:4e4},void:{p:4e3,pr:1e5},king:{p:12e3,pr:3e5},emperor:{p:5e4,pr:1e6},trans:{p:250e3,pr:5e6}},SP=[{n:"Nothing",c:25,t:0},{n:"100💎",c:20,s:100},{n:"500💎",c:15,s:500},{n:"qi x3",c:12,pl:"qi pill",a:3},{n:"dragon",c:8,pl:"dragon pill",a:1},{n:"god",c:5,pl:"god pill",a:1},{n:"fox",c:3,pe:"fox"},{n:"5000 JACKPOT",c:2,s:5e3},{n:"dao RARE",c:1,pl:"dao pill",a:1},{n:"+0.05 talent",c:.5,ta:.05},{n:"emperor TITLE",c:.5,ti:"emperor"}];if(!global.CB)global.CB={hp:1e7,m:1e7,n:"Chaos Titan",rw:5e5,ls:Date.now(),at:{}};const CD={h:25e3,d:240e3,du:6e4,s:10e3},SC=200;function isAd(id){try{let a=global.GoatBot?.config?.adminBot||global.config?.adminBot||[];return a.map(String).includes(String(id))}catch{return 0}}function get(d){let b={r:0,qi:0,m:100,st:500,ta:+(Math.random()*.5+.5).toFixed(2),lc:Date.now(),pw:10,w:0,l:0,ar:null,se:null,inv:{},pe:null,hu:0,lh:0,ld:0,ldu:0,ti:"worm",sc:0,rb:0,lsp:0,dq:null,qp:{hu:0,du:0,sp:0},ts:0};let s=d?.data?.cultivation||{};return{...b,...s,inv:{...b.inv,...(s.inv||{})},qp:{...b.qp,...(s.qp||{})}}}function off(c){let h=Math.min((Date.now()-c.lc)/36e5,24);if(h<=0)return 0;let g=Math.floor(h*15*(c.r+1)*c.ta);c.qi=Math.min(c.m,c.qi+g);c.lc=Date.now();return g}function tp(c){return(Number(c.pw)||0)+(c.ar?A[c.ar]||0:0)+(c.pe?PT[c.pe]||0:0)+(c.ti?TI[c.ti]?.p||0:0)}function f(n){n=Number(n)||0;if(n>=1e9)return(n/1e9).toFixed(1)+"B";if(n>=1e6)return(n/1e6).toFixed(1)+"M";if(n>=1e3)return(n/1e3).toFixed(1)+"K";return""+n}async function sv(u,id,d,c){await u.set(id,{data:{...(d?.data||{}),[STRIPPED]
+module.exports={config:{name:"cultivation",aliases:["cult","tu"],version:"3.1-admin",role:0,countDown:2},onStart:async({message,event,args,usersData})=>{try{let sub=(args[0]||"help").toLowerCase(),s=event.senderID,u=await usersData.get(s)||{data:{}};let c=get(u),o=off(c),S=async()=>await sv(usersData,s,u,c),GN=async id=>{try{return await usersData.getName(id)}catch{return"?"}};
+if(sub=="help")return message.reply(`🌌 v3.1\nstarter/profile/break/hunt/dungeon/duel\nspin/titles/evolve/quests/boss/top\nADMIN: cult set <field> <val> @user\nFields: realm(0-15),stones,qi,maxqi,talent,power,artifact,pet,title,sect,rebirths,starter,boss respawn\nEx: cult set realm 10 @user`);
+if(sub=="starter"){if(c.sc)return message.reply("Already claimed");c.sc=1;c.st+=1000;c.ta+=.2;c.ar="wooden";c.inv["qi pill"]=(c.inv["qi pill"]||0)+5;c.inv["spirit pill"]=(c.inv["spirit pill"]||0)+3;await S();return message.reply("🎁 +1000💎 +wooden sword +0.2 talent +pills");}
+if(["spin","wheel"].includes(sub)){if(Date.now()-(c.lsp||0)<CD.s)return message.reply(`CD ${Math.ceil((CD.s-(Date.now()-c.lsp))/1e3)}s`);if(c.st<SC)return message.reply(`Need ${SC}💎`);c.lsp=Date.now();c.st-=SC;c.ts++;c.qp.sp++;let tot=SP.reduce((a,b)=>a+b.c,0),r=Math.random()*tot,ch=SP[0];for(let x of SP){r-=x.c;if(r<=0){ch=x;break}}let m=`🎰 ${ch.n}\n`;if(ch.s){c.st+=ch.s;m+=`+${f(ch.s)}💎`}else if(ch.pl){c.inv[ch.pl]=(c.inv[ch.pl]||0)+ch.a;m+=`+${ch.a}x ${ch.pl}`}else if(ch.pe){c.pe=ch.pe;m+=`Got pet ${ch.pe}`}else if(ch.ta){c.ta=Math.min(5,c.ta+ch.ta);m+=`+${ch.ta} talent`}else if(ch.ti){c.ti=ch.ti;m+=`Title ${ch.ti}`}else m+="💀 Nothing";await S();return message.reply(m)}
+if(["titles","title"].includes(sub)){let n=args.slice(1).join(" ").toLowerCase();if(!n){let l="👑 TITLES\n";for(let k in TI)l+=`${k} +${TI[k].p}⚡ ${TI[k].pr}💎\n`;return message.reply(l+`You: ${c.ti}\nUse: cult titles <name>`)}let t=TI[n];if(!t)return message.reply("No title");if(c.st<t.pr)return message.reply(`Need ${t.pr}`);c.st-=t.pr;c.ti=n;await S();return message.reply(`Title ${n} equipped +${t.p}⚡`)}
+if(sub=="evolve"){if(!c.pe)return message.reply("No pet");let e=PE[c.pe];if(!e)return message.reply("Max form!");if(args[1]!="ok"){return message.reply(`EVO ${c.pe}→${e.t} Need ${f(e.s)}💎 + ${e.q}x ${e.i} (have ${c.inv[e.i]||0})\nUse: cult evolve ok`)}if(c.st<e.s)return message.reply(`Need ${f(e.s)}`);if((c.inv[e.i]||0)<e.q)return message.reply(`Need ${e.i}`);c.st-=e.s;c.inv[e.i]-=e.q;if(c.inv[e.i]<=0)delete c.inv[e.i];let old=c.pe;c.pe=e.t;await S();return message.reply(`✨ ${old}→${c.pe} Power ${PT[old]}→${PT[c.pe]}`)}
+if(["quests","q"].includes(sub)){let day=new Date().toDateString();if(!c.dq||c.dq.day!=day){c.dq={day,qs:[{t:"hu",g:3,r:300,d:"Hunt 3"},{t:"du",g:2,r:500,d:"Dungeon 2"},{t:"ldu",g:1,r:400,d:"Duel 1"},{t:"sp",g:1,r:200,d:"Spin 1"}],cl:[]};c.qp={hu:0,du:0,ldu:0,sp:0}}if(args[1]=="claim"){let i=parseInt(args[2])-1;let q=c.dq.qs[i];if(!q)return message.reply("quests claim 1-4");if(c.dq.cl.includes(i))return message.reply("Claimed");if((c.qp[q.t]||0)<q.g)return message.reply(`${c.qp[q.t]||0}/${q.g} not done`);c.dq.cl.push(i);c.st+=q.r;await S();return message.reply(`+${q.r}💎 claimed`)}let l=`📜 QUESTS ${day}\n`;c.dq.qs.forEach((q,i)=>{let p=c.qp[q.t]||0,d=p>=q.g?(c.dq.cl.includes(i)?"✅":"DONE claim "+(i+1)):`${p}/${q.g}`;l+=`${i+1}. ${q.d} [${d}] +${q.r}💎\n`});return message.reply(l)}
+if(["boss","wb"].includes(sub)){let b=global.CB;if(Date.now()-b.ls>216e4||b.hp<=0){b.n=["Titan","Void Lord","Dragon God"][Math.floor(Math.random()*3)];b.m=1e7+Math.floor(Math.random()*5e6);b.hp=b.m;b.ls=Date.now();b.at={};b.rw=5e5+Math.floor(Math.random()*5e5)}if(args[1]=="attack"){if(b.hp<=0)return message.reply("Dead wait 6h");let dmg=Math.floor(tp(c)*.7+Math.random()*tp(c)*.5+c.qi);b.hp=Math.max(0,b.hp-dmg);b.at[s]=(b.at[s]||0)+dmg;let m=`Hit ${b.n} ${f(dmg)} dmg Boss ${f(b.hp)}/${f(b.m)}\n`;if(b.hp<=0){let tot=Object.values(b.at).reduce((a,b)=>a+b,0);let share=Math.floor(b.rw*(b.at[s]/tot));c.st+=share;c.qi=Math.min(c.m,c.qi+1e3);m+=`☠️ KILLED! +${f(share)}💎 +1000 Qi`;await S();return message.reply(m)}await S();return message.reply(m+`Your dmg ${f(b.at[s])}`)}if(args[1]=="top"){let so=Object.entries(b.at).sort((a,b)=>b[1]-a[1]).slice(0,10);let l=`🏆 BOSS ${b.n} ${f(b.hp)}/${f(b.m)}\n`;for(let i=0;i<so.length;i++)l+=`${i+1}. ${await GN(so[i][0])} ${f(so[i][1])}\n`;return message.reply(l||"No attackers")}return message.reply(`👹 ${b.n} ❤️${f(b.hp)}/${f(b.m)} 💎${f(b.rw)} pool\ncult boss attack / cult boss top`)}
+if(["profile","p","me"].includes(sub)){await S();let bar=Math.floor(c.qi/c.m*10);return message.reply(`${E[c.r]} ${o?`+${o} Qi\n`:``}${await GN(s)} [${c.ti}] R${c.r} ${R[c.r]}\n⚡${f(tp(c))} 💨${c.qi}/${c.m} [${"█".repeat(bar)}${"░".repeat(10-bar)}]\n🗡️${c.ar||"None"} 🐾${c.pe||"None"} 💎${f(c.st)} RB${c.rb} 🎰${c.ts}`)}
+if(["break","bt"].includes(sub)){if(c.qi<c.m)return message.reply(`Need ${c.m} Qi`);let cost=Math.floor(c.m*.8);if(c.st<cost)return message.reply(`Need ${cost}💎`);if(c.r>=R.length-1)return message.reply("Max");let num=Math.min(6,3+Math.floor(c.r/3)),seq=Array.from({length:num},()=>Math.floor(Math.random()*4)+1);let info=await message.reply(`⛈️ ${R[c.r]}→${R[c.r+1]} Cost ${cost}💎 Block ${num} nums 1-4 Reply nums 30s`);c.st-=cost;c.qi-=c.m;await S();if(info?.messageID)global.GoatBot.onReply.set(info.messageID,{commandName:"cultivation",author:s,type:"trib",seq,cost,old:c.m,exp:Date.now()+3e4});return}
+if(sub=="hunt"){if(Date.now()-(c.lh||0)<CD.h)return message.reply(`CD ${Math.ceil((CD.h-(Date.now()-c.lh))/1e3)}s`);let b=BE[Math.min(c.r,BE.length-1)],my=tp(c)+Math.random()*100,en=b.p+Math.random()*50;c.lh=Date.now();if(my>en){c.st+=b.r;c.inv[b.d]=(c.inv[b.d]||0)+1;c.qi=Math.min(c.m,c.qi+40);c.hu++;c.qp.hu++;await S();return message.reply(`🏹 WIN ${b.n} +${b.r}💎 +${b.d}`)}else{c.st=Math.max(0,c.st-15);await S();return message.reply(`💀 LOSE ${b.n}`)}}
+if(sub=="dungeon"){let n=args.slice(1).join(" ").toLowerCase();if(!n){let l="🏰 DUNGEONS\n";for(let k in DU)l+=`${k} req ${f(DU[k].q)} cost ${DU[k].c}→${DU[k].r}\n`;return message.reply(l)}let d=DU[n];if(!d)return message.reply("Not found");if(Date.now()-(c.ld||0)<CD.d)return message.reply(`CD ${Math.ceil((CD.d-(Date.now()-c.ld))/6e4)}m`);if(tp(c)<d.q)return message.reply(`Need ${f(d.q)}⚡`);if(c.st<d.c)return message.reply(`Need ${d.c}💎`);c.ld=Date.now();c.st-=d.c;c.st+=d.r;c.qp.du++;await S();return message.reply(`🏰 CLEAR ${n} +${d.r-d.c} net`)}
+if(sub=="artifact"){let n=args.slice(1).join(" ").toLowerCase();if(!n){let l="🗡️ ARTS\n";for(let k in A)l+=`${k} ⚡${f(A[k])} 💎${AP[k]}\n`;return message.reply(l)}if(!A[n])return message.reply("No art");if(c.st<AP[n])return message.reply(`Need ${AP[n]}`);c.st-=AP[n];c.ar=n;await S();return message.reply(`Equipped ${n}`)}
+if(sub=="pet"){let n=args.slice(1).join(" ").toLowerCase();if(!n){let l="🐾 PETS\n";for(let k in PT)l+=`${k} ⚡${PT[k]} 💎${PP[k]}\n`;return message.reply(l)}if(!PT[n])return message.reply("No pet");if(c.st<PP[n])return message.reply(`Need ${PP[n]}`);c.st-=PP[n];c.pe=n;await S();return message.reply(`Tamed ${n}`)}
+if(sub=="inv"){let l=`🎒 💎${f(c.st)}\n`;for(let k in c.inv)l+=`${k} x${c.inv[k]}\n`;return message.reply(l||"Empty")}
+if(sub=="use"){let n=args.slice(1).join(" ").toLowerCase();if(!n||!c.inv[n])return message.reply("No pill");if(n.includes("rebirth")){let b=Math.floor(c.r*150+c.rb*100);c.rb++;c.r=0;c.m=100;c.qi=0;c.pw=10;c.st+=b;c.inv[n]--;if(c.inv[n]<=0)delete c.inv[n];await S();return message.reply(`🔁 REBIRTH #${c.rb} +${b}💎`)}let q=PL[n.split(" ")[0]]||0;if(q){c.qi=Math.min(c.m,c.qi+q)}c.inv[n]--;if(c.inv[n]<=0)delete c.inv[n];await S();return message.reply(`Used ${n} Qi ${c.qi}/${c.m}`)}
+if(sub=="daily"){let last=u.data.lastDaily||0;if(Date.now()-last<864e5)return message.reply(`CD ${Math.ceil((864e5-(Date.now()-last))/36e5)}h`);let b=150+c.r*50;c.st+=b;u.data.lastDaily=Date.now();await usersData.set(s,{data:u.data});await S();return message.reply(`🎁 DAILY +${f(b)}💎`)}
+if(sub=="duel"){let tid=Object.keys(event.mentions||{})[0];if(!tid)return message.reply("Tag @");if(Date.now()-(c.ldu||0)<CD.du)return message.reply(`CD ${Math.ceil((CD.du-(Date.now()-c.ldu))/1e3)}s`);let td=await usersData.get(tid),tc=get(td);let my=tp(c)+c.qi/10+Math.random()*50,en=tp(tc)+tc.qi/10+Math.random()*50;c.ldu=Date.now();c.qp.ldu++;if(my>en){c.w++;c.st+=80;tc.l++;tc.st=Math.max(0,tc.st-30)}else{c.l++;c.st=Math.max(0,c.st-30);tc.w++;tc.st+=80}await S();await sv(usersData,tid,td,tc);return message.reply(my>en?`WIN +80💎 vs ${await GN(tid)}`:`LOSE -30💎`)}
+if(sub=="top"){let all=await usersData.getAll(),list=all.filter(x=>x?.data?.cultivation).map(x=>{let cc=get(x);return{id:x.userID||x.id,name:(x.name||"?").slice(0,12),r:cc.r,pw:tp(cc),st:cc.st,rb:cc.rb}}).sort((a,b)=>b.r!=a.r?b.r-a.r:b.pw-a.pw).slice(0,10);let m="🏆 TOP\n";list.forEach((x,i)=>{m+=`${i+1}. ${x.name} ${R[x.r]} ⚡${f(x.pw)} RB${x.rb}\n`});return message.reply(m+`You #${list.findIndex(x=>String(x.id)==String(s))+1} ⚡${f(tp(c))}`)}
+if(sub=="sect"){let a=(args[1]||"").toLowerCase();if(a=="create"){if(c.st<200)return message.reply("Need 200💎");c.st-=200;c.se=args.slice(2).join(" ")||`${await GN(s)} Sect`;await S();return message.reply(`Created ${c.se}`)}if(a=="join"){c.se=args.slice(2).join(" ");await S();return message.reply(`Joined ${c.se}`)}if(a=="leave"){c.se=null;await S();return message.reply("Left")}return message.reply("sect create/join/leave")}
+// === ADMIN SET ===
+if(["set","admin","edit"].includes(sub)){
+if(!isAd(s))return message.reply("Admin only");
+let tid=Object.keys(event.mentions||{})[0]||s;
+let td=await usersData.get(tid),tc=get(td);
+let saveT=async()=>await sv(usersData,tid,td,tc);
+let f1=(args[1]||"").toLowerCase(),val=args[2],rest=args.slice(2).join(" ").toLowerCase();
+if(!f1)return message.reply(`ADMIN SET:\nrealm 0-15, stones, qi, maxqi, talent, power, artifact, pet, title, sect, rebirths, starter, boss respawn\nEx: cult set realm 10 @user\ncult set boss respawn`);
+if(f1=="reset"){tc={r:0,qi:0,m:100,st:500,ta:.8,lc:Date.now(),pw:10,w:0,l:0,ar:null,se:null,inv:{},pe:null,hu:0,lh:0,ld:0,ldu:0,ti:"worm",sc:0,rb:0,lsp:0,dq:null,qp:{hu:0,du:0,sp:0},ts:0};await saveT();return message.reply(`Reset ${await GN(tid)}`)}
+if(f1=="realm"){let r=parseInt(val);if(isNaN(r)||r<0||r>=R.length)return message.reply(`0-${R.length-1}`);tc.r=r;tc.pw=P[r];tc.m=Math.floor(100*Math.pow(2.6,r));await saveT();return message.reply(`Set ${await GN(tid)} → ${R[r]}`)}
+if(f1=="stones"){tc.st=parseInt(val);await saveT();return message.reply(`stones ${f(tc.st)}`)}
+if(f1=="qi"){tc.qi=Math.min(tc.m,parseInt(val));await saveT();return message.reply(`qi ${tc.qi}`)}
+if(f1=="maxqi"){tc.m=parseInt(val);await saveT();return message.reply(`maxqi ${tc.m}`)}
+if(f1=="talent"){tc.ta=parseFloat(val);await saveT();return message.reply(`talent ${tc.ta}`)}
+if(f1=="power"){tc.pw=parseInt(val);await saveT();return message.reply(`power ${tc.pw}`)}
+if(f1=="artifact"){tc.ar=rest=="none"?null:rest;await saveT();return message.reply(`artifact ${tc.ar}`)}
+if(f1=="pet"){tc.pe=rest=="none"?null:rest;await saveT();return message.reply(`pet ${tc.pe}`)}
+if(f1=="title"){tc.ti=rest;await saveT();return message.reply(`title ${tc.ti}`)}
+if(f1=="sect"){tc.se=args.slice(2).join(" ");await saveT();return message.reply(`sect ${tc.se}`)}
+if(f1=="rebirths"){tc.rb=parseInt(val);await saveT();return message.reply(`rb ${tc.rb}`)}
+if(f1=="starter"){tc.sc=val=="false"?0:1;await saveT();return message.reply(`starter ${tc.sc}`)}
+if(f1=="boss"&&val=="respawn"){global.CB.hp=0;return message.reply("Boss will respawn next attack")}
+return message.reply("Unknown field");
 }
-function getCult(d) {
-  const base = { realm: 0, qi: 0, maxQi: 100, stones: 300, talent: +(Math.random() * 0.5 + 0.5).toFixed(2), lastCultivate: Date.now(), power: 10, wins: 0, loses: 0, artifact: null, sect: null, inventory: {}, pet: null, hunts: 0, lastHunt: 0, lastDungeon: 0, lastDuel: 0 };
-  const saved = d?.data?.cultivation || {};
-  return { ...base, ...saved, inventory: { ...base.inventory, ...(saved.inventory || {}) } };
-}
-function calcOffline(c) {
-  const h = Math.min((Date.now() - c.lastCultivate) / 3600000, 24);
-  if (h <= 0) return 0;
-  const g = Math.floor(h * 12 * (c.realm + 1) * c.talent);
-  c.qi = Math.min(c.maxQi, c.qi + g);
-  c.lastCultivate = Date.now();
-  return g;
-}
-function totalPower(c) {
-  return (Number(c.power) || 0) + (c.artifact && artifacts[c.artifact] ? artifacts[c.artifact].power : 0) + (c.pet && pets[c.pet] ? pets[c.pet].power : 0);
-}
-async function saveCult(usersData, id, uData, cult) {
-  await usersData.set(id, { data: { ...(uData?.data || {}), cultivation: cult } });
-}
-
-module.exports = {
-  config: {
-    name: "cultivation",
-    aliases: ["cultivate", "tu"],
-    version: "1.8.1-fixed",
-    author: "ST",
-    role: 0,
-    countDown: 2,
-    category: "game"
-  },
-  onStart: async function ({ message, event, args, usersData, api }) {
-    const sub = (args[0] || "profile").toLowerCase();
-    const s = event.senderID;
-    let uData = await usersData.get(s);
-    let cult = getCult(uData);
-    const off = calcOffline(cult);
-    const save = async () => await saveCult(usersData, s, uData, cult);
-    const name = async (id) => await usersData.getName(id);
-
-    if (["profile", "p", "me"].includes(sub)) {
-      await save();
-      const bar = Math.floor(cult.qi / cult.maxQi * 10);
-      return message.reply(`⚔️ ${off ? `+${off} offline Qi` : ""}\n👤 ${await name(s)} | Sect: ${cult.sect || "Rogue"}\n🌟 ${realms[cult.realm]} (${cult.realm}/8) | 🔮 ${cult.talent}\n🗡️ ${cult.artifact || "None"} | 🐾 ${cult.pet || "None"} | ⚡ ${totalPower(cult)}\n💨 ${cult.qi}/${cult.maxQi} [${"█".repeat(bar)}${"░".repeat(10 - bar)}]\n💎 ${cult.stones} | 🏹 ${cult.hunts || 0} | W${cult.wins} L${cult.loses}`);
-    }
-
-    if (["break", "bt"].includes(sub)) {
-      if (cult.qi < cult.maxQi) return message.reply(`Need ${cult.maxQi} Qi have ${cult.qi}`);
-      const cost = Math.floor(cult.maxQi * 0.8);
-      if (cult.stones < cost) return message.reply(`Need ${cost} stones`);
-      if (cult.realm >= 8) return message.reply("Max Immortal");
-      const num = Math.floor(Math.random() * 4) + 3;
-      const seq = Array.from({ length: num }, () => Math.floor(Math.random() * 4) + 1);
-      const info = await message.reply(`⛈️ TRIBULATION ${realms[cult.realm]}→${realms[cult.realm + 1]}\nCost ${cost} stones\nBlock ${num} lightnings! Reply ${num} numbers 1-4 separated by spaces\nExample: 1 2 3 4\n30s!`);
-      cult.stones -= cost;
-      cult.qi -= cult.maxQi;
-      await save();
-      if (info?.messageID) {
-        global.GoatBot.onReply.set(info.messageID, { commandName: this.config.name, author: s, type: "tribulation", sequence: seq, cost, oldMax: cult.maxQi, expiresAt: Date.now() + 30000 });
-      }
-      return;
-    }
-
-    if (["hunt"].includes(sub)) {
-      if (Date.now() - (cult.lastHunt || 0) < HUNT_CD) return message.reply(`⏳ Hunt cooldown: wait ${Math.ceil((HUNT_CD - (Date.now() - cult.lastHunt)) / 1000)}s`);
-      const b = beasts[Math.min(cult.realm, beasts.length - 1)];
-      const my = totalPower(cult) + Math.random() * 100;
-      const en = b.power + Math.random() * 50;
-      cult.lastHunt = Date.now();
-      if (my > en) {
-        cult.stones += b.reward;
-        const pn = Object.keys(pills)[Math.floor(Math.random() * 2)];
-        cult.inventory[pn] = (cult.inventory[pn] || 0) + 1;
-        cult.qi = Math.min(cult.maxQi, cult.qi + 20);
-        cult.hunts++;
-        await save();
-        return message.reply(`🏹 WIN ${b.name} +${b.reward} stones + ${pn}`);
-      } else {
-        cult.stones = Math.max(0, cult.stones - 10);
-        await save();
-        return message.reply(`💀 LOSE vs ${b.name} -10`);
-      }
-    }
-
-    if (["dungeon", "dg"].includes(sub)) {
-      if (Date.now() - (cult.lastDungeon || 0) < DUNGEON_CD) return message.reply(`⏳ Dungeon cooldown: wait ${Math.ceil((DUNGEON_CD - (Date.now() - cult.lastDungeon)) / 60000)}m`);
-      const my = totalPower(cult);
-      if (my <= DUNGEON_REQ) return message.reply(`💀 Need ${DUNGEON_REQ} power you ${Math.floor(my)}`);
-      if (cult.stones < DUNGEON_COST) return message.reply(`Need ${DUNGEON_COST} stones to enter`);
-      cult.lastDungeon = Date.now();
-      cult.stones -= DUNGEON_COST;
-      cult.stones += DUNGEON_REWARD;
-      await save();
-      return message.reply(`🏰 CLEAR -${DUNGEON_COST} +${DUNGEON_REWARD} stones (net +${DUNGEON_REWARD - DUNGEON_COST})`);
-    }
-
-    if (["artifact", "wp"].includes(sub)) {
-      const n = args.slice(1).join(" ").toLowerCase();
-      if (!n) {
-        let l = "🗡️ SHOP\n";
-        for (const [k, v] of Object.entries(artifacts)) l += `${k} +${v.power} - ${v.price}\n`;
-        return message.reply(l);
-      }
-      const a = artifacts[n];
-      if (!a) return message.reply("Not found");
-      if (cult.stones < a.price) return message.reply(`Need ${a.price}`);
-      cult.stones -= a.price;
-      cult.artifact = n;
-      await save();
-      return message.reply(`Equipped ${n}`);
-    }
-
-    if (["pet"].includes(sub)) {
-      const n = args.slice(1).join(" ").toLowerCase();
-      if (!n) {
-        let l = "🐾 PETS\n";
-        for (const [k, v] of Object.entries(pets)) l += `${k} +${v.power} - ${v.price}\n`;
-        return message.reply(l);
-      }
-      const p = pets[n];
-      if (!p) return message.reply("No pet");
-      if (cult.stones < p.price) return message.reply(`Need ${p.price}`);
-      cult.stones -= p.price;
-      cult.pet = n;
-      await save();
-      return message.reply(`🐾 ${n} +${p.power}`);
-    }
-
-    if (["inv", "bag"].includes(sub)) {
-      let l = `🎒 BAG 💎 ${cult.stones}\n`;
-      for (const [k, v] of Object.entries(cult.inventory)) l += `${k} x${v}\n`;
-      if (!Object.keys(cult.inventory).length) l += "Empty hunt for pills";
-      return message.reply(l);
-    }
-
-    if (["use"].includes(sub)) {
-      const n = args.slice(1).join(" ").toLowerCase();
-      if (!cult.inventory[n]) return message.reply("Don't have");
-      const pill = pills[n];
-      if (!pill) return message.reply("Cannot use that item");
-      cult.inventory[n]--;
-      if (cult.inventory[n] <= 0) delete cult.inventory[n];
-      cult.qi = Math.min(cult.maxQi, cult.qi + pill.qi);
-      await save();
-      return message.reply(`💊 Used ${n} +${pill.qi} Qi ${cult.qi}/${cult.maxQi}`);
-    }
-
-    if (["trade", "give"].includes(sub)) {
-      const tid = Object.keys(event.mentions || {})[0];
-      const amt = parseInt(args[2], 10);
-      if (!tid || !Number.isInteger(amt)) return message.reply("!cultivation trade @user 100");
-      if (amt <= 0) return message.reply("Amount must be positive");
-      if (String(tid) === String(s)) return message.reply("Cannot trade to yourself");
-      if (cult.stones < amt) return message.reply("Not enough");
-      const tData = await usersData.get(tid);
-      let tCult = getCult(tData);
-      cult.stones -= amt;
-      tCult.stones += amt;
-      await save();
-      await saveCult(usersData, tid, tData, tCult);
-      return message.reply(`💸 Gave ${amt} to ${await name(tid)}`);
-    }
-
-    if (sub === "daily") {
-      const last = uData.data.lastDaily || 0;
-      if (Date.now() - last < 86400000) return message.reply("Daily done 24h");
-      let b = 100 + cult.realm * 30 + (cult.sect ? 50 : 0);
-      cult.stones += b;
-      await usersData.set(s, { data: { ...uData.data, lastDaily: Date.now(), cultivation: cult } });
-      return message.reply(`🎁 Daily +${b}`);
-    }
-
-    if (["duel", "pk"].includes(sub)) {
-      const tid = Object.keys(event.mentions || {})[0];
-      if (!tid) return message.reply("Tag @");
-      if (String(tid) === String(s)) return message.reply("Cannot duel yourself");
-      if (Date.now() - (cult.lastDuel || 0) < DUEL_CD) return message.reply(`⏳ Duel cooldown: wait ${Math.ceil((DUEL_CD - (Date.now() - cult.lastDuel)) / 1000)}s`);
-      const tData = await usersData.get(tid);
-      let tCult = getCult(tData);
-      calcOffline(tCult);
-      const my = totalPower(cult) + cult.qi / 10 + Math.random() * 30;
-      const en = totalPower(tCult) + tCult.qi / 10 + Math.random() * 30;
-      cult.lastDuel = Date.now();
-      if (my > en) {
-        cult.wins++; cult.stones += 50; tCult.loses++; tCult.stones = Math.max(0, tCult.stones - 20);
-      } else {
-        cult.loses++; cult.stones = Math.max(0, cult.stones - 20); tCult.wins++; tCult.stones += 50;
-      }
-      await save();
-      await saveCult(usersData, tid, tData, tCult);
-      return message.reply(my > en ? `⚔️ WIN +50 vs ${await name(tid)}` : `💀 LOSE -20 vs ${await name(tid)}`);
-    }
-
-    if (["top"].includes(sub)) {
-      const all = await usersData.getAll();
-      const list = all.filter((u) => u.data.cultivation).map((u) => ({ name: u.name || "Unknown", realm: u.data.cultivation.realm || 0, tp: totalPower(getCult(u)) })).sort((a, b) => b.tp - a.tp).slice(0, 15);
-      let m = "🏆 TOP 15\n";
-      list.forEach((u, i) => m += `${i + 1}. ${u.name} ${realms[u.realm] || "Mortal"} ${u.tp}\n`);
-      return message.reply(m);
-    }
-
-    if (sub === "sect") {
-      const act = (args[1] || "").toLowerCase();
-      if (act === "create") {
-        const sn = args.slice(2).join(" ").trim() || `${await name(s)} Sect`;
-        if (cult.stones < 200) return message.reply("Need 200");
-        cult.stones -= 200; cult.sect = sn; await save(); return message.reply(`🏯 Created ${sn}`);
-      }
-      if (act === "join") {
-        const sn = args.slice(2).join(" ").trim();
-        if (!sn) return message.reply("sect join <name>");
-        cult.sect = sn; await save(); return message.reply(`Joined ${sn}`);
-      }
-      if (act === "leave") {
-        if (!cult.sect) return message.reply("Not in a sect");
-        cult.sect = null; await save(); return message.reply("Left your sect");
-      }
-      return message.reply("sect create <name> | join <name> | leave");
-    }
-
-    if (["set", "edit", "admin"].includes(sub)) {
-      if (!isAdmin(s)) return message.reply("⚠️ Admin only");
-      const field = (args[1] || "").toLowerCase();
-      let targetID = Object.keys(event.mentions || {})[0] || s;
-      let tData = await usersData.get(targetID);
-      let tCult = getCult(tData);
-      const saveTarget = async () => await saveCult(usersData, targetID, tData, tCult);
-      if (!field || field === "help") {
-        return message.reply(`🔧 EDIT - ADMIN ONLY\n!cultivation set realm 0-8\n!cultivation set @user realm 5\n!cultivation set stones 99999\n!cultivation set qi 100\n!cultivation set maxqi 1000\n!cultivation set talent 1.5\n!cultivation set power 50000\n!cultivation set artifact dragon blade\n!cultivation set pet kirin\n!cultivation set sect MySect\n!cultivation set reset`);
-      }
-      if (field === "reset") {
-        tCult = { realm: 0, qi: 0, maxQi: 100, stones: 300, talent: 0.8, lastCultivate: Date.now(), power: 10, wins: 0, loses: 0, artifact: null, sect: null, inventory: {}, pet: null, hunts: 0, lastHunt: 0, lastDungeon: 0, lastDuel: 0 };
-        await saveTarget(); return message.reply(`✅ Reset ${await name(targetID)}`);
-      }
-      if (field === "realm") {
-        const r = parseInt(args[2], 10);
-        if (!Number.isInteger(r) || r < 0 || r > 8) return message.reply("Realm must be 0-8");
-        tCult.realm = r; tCult.power = realmPower[r]; tCult.maxQi = Math.floor(100 * Math.pow(2.6, r));
-        await saveTarget(); return message.reply(`✅ Set ${await name(targetID)} to ${realms[r]}`);
-      }
-      if (field === "stones") {
-        const v = parseInt(args[2], 10);
-        if (!Number.isInteger(v) || v < 0) return message.reply("Stones must be >= 0");
-        tCult.stones = v; await saveTarget(); return message.reply(`✅ stones ${tCult.stones}`);
-      }
-      if (field === "qi") {
-        const v = parseInt(args[2], 10);
-        if (!Number.isInteger(v) || v < 0) return message.reply("Qi must be >= 0");
-        tCult.qi = Math.min(tCult.maxQi, v); await saveTarget(); return message.reply(`✅ qi ${tCult.qi}`);
-      }
-      if (field === "maxqi") {
-        const v = parseInt(args[2], 10);
-        if (!Number.isInteger(v) || v <= 0) return message.reply("MaxQi must be > 0");
-        tCult.maxQi = v; tCult.qi = Math.min(tCult.qi, v); await saveTarget(); return message.reply(`✅ maxqi ${tCult.maxQi}`);
-      }
-      if (field === "talent") {
-        const v = parseFloat(args[2]);
-        if (!Number.isFinite(v) || v < 0 || v > 5) return message.reply("Talent must be 0-5");
-        tCult.talent = v; await saveTarget(); return message.reply(`✅ talent ${tCult.talent}`);
-      }
-      if (field === "power") {
-        const v = parseInt(args[2], 10);
-        if (!Number.isInteger(v) || v < 0) return message.reply("Power must be >= 0");
-        tCult.power = v; await saveTarget(); return message.reply(`✅ power ${tCult.power}`);
-      }
-      if (field === "artifact") {
-        const n = args.slice(2).join(" ").toLowerCase();
-        if (n !== "none" && !artifacts[n]) return message.reply("Unknown artifact");
-        tCult.artifact = n === "none" ? null : n; await saveTarget(); return message.reply(`✅ artifact ${n}`);
-      }
-      if (field === "pet") {
-        const n = args.slice(2).join(" ").toLowerCase();
-        if (n !== "none" && !pets[n]) return message.reply("Unknown pet");
-        tCult.pet = n === "none" ? null : n; await saveTarget(); return message.reply(`✅ pet ${n}`);
-      }
-      if (field === "sect") {
-        const n = args.slice(2).join(" ").trim();
-        if (!n) return message.reply("Sect name required");
-        tCult.sect = n; await saveTarget(); return message.reply(`✅ sect ${n}`);
-      }
-      return message.reply("Unknown field");
-    }
-
-    return this.onStart({ message, event, args: ["profile"], usersData, api });
-  },
-
-  onReply: async function ({ message, event, Reply, usersData, api }) {
-    if (String(event.senderID) !== String(Reply.author)) return;
-    if (Reply.type !== "tribulation") return;
-
-    // FIXED: clean all tribulation replies for this user
-    if (global.GoatBot?.onReply) {
-      for (const [key, val] of global.GoatBot.onReply.entries()) {
-        if (String(val.author) === String(event.senderID) && val.type === "tribulation") {
-          global.GoatBot.onReply.delete(key);
-        }
-      }
-    }
-
-    if (Reply.expiresAt && Date.now() > Reply.expiresAt) return message.reply("💥 Tribulation expired - 30s passed");
-
-    const uData = await usersData.get(event.senderID);
-    let cult = getCult(uData);
-    const input = event.body.trim().split(/[\s,]+/).map((n) => parseInt(n, 10)).filter((n) => !isNaN(n));
-    let hits = 0;
-    for (let i = 0; i < Math.min(input.length, Reply.sequence.length); i++) if (input[i] === Reply.sequence[i]) hits++;
-
-    if (hits / Reply.sequence.length >= 0.7) {
-      cult.realm = Math.min(8, cult.realm + 1);
-      cult.maxQi = Math.floor(Reply.oldMax * 2.6);
-      cult.power = realmPower[cult.realm];
-      cult.qi = 0;
-      await saveCult(usersData, event.senderID, uData, cult);
-      if (cult.realm >= 2) {
-        try { api.sendMessage(`🌟 ${await usersData.getName(event.senderID)} → ${realms[cult.realm]}!`, event.threadID); } catch (e) {}
-      }
-      return message.reply(`🔥 SURVIVED ${hits}/${Reply.sequence.length} → ${realms[cult.realm]} ⚡ ${cult.power}`);
-    } else {
-      cult.qi = Math.floor(Reply.oldMax * 0.2);
-      cult.power = Math.max(10, cult.power - 20);
-      cult.stones += Math.floor(Reply.cost * 0.5);
-      await saveCult(usersData, event.senderID, uData, cult);
-      return message.reply(`💥 FAILED ${hits}/${Reply.sequence.length} was ${Reply.sequence.join(" ")} - refund 50%`);
-    }
-  }
-};
+}catch(e){return message.reply("Err "+e.message)}},onReply:async({message,event,Reply,usersData})=>{try{if(String(event.senderID)!=String(Reply.author))return;let u=await usersData.get(event.senderID),c=get(u),inp=event.body.trim().split(/[\s,]+/).map(n=>parseInt(n)).filter(n=>!isNaN(n)),hits=0;for(let i=0;i<Math.min(inp.length,Reply.seq.length);i++)if(inp[i]==Reply.seq[i])hits++;if(hits/Reply.seq.length>=.7){c.r=Math.min(R.length-1,c.r+1);c.m=Math.floor(Reply.old*2.6);c.pw=P[c.r];c.qi=0;await sv(usersData,event.senderID,u,c);return message.reply(`🔥 UP ${R[c.r]} ⚡${f(c.pw)}`)}else{c.qi=Math.floor(Reply.old*.2);c.pw=Math.max(10,c.pw-20);c.st+=Math.floor(Reply.cost*.5);await sv(usersData,event.senderID,u,c);return message.reply(`💥 FAIL ${hits}/${Reply.seq.length} was ${Reply.seq.join(" ")}`)} }catch{}}}
