@@ -1,20 +1,26 @@
 const axios = require("axios");
 module.exports = {
-config: { name: "shoti", version: "3.0-NEWAPI", author: "Feng", role: 0, category: "fun" },
-onStart: async function({ api, event }) {
+config: { name: "shoti", version: "3.0-FIXED", author: "Feng", role: 0, category: "FUN", guide: "{pn}" },
+onStart: async function({ api, event, message }) {
 try{
-let {data} = await axios.get("https://shoti.kenliejugarap.com/api/v1/request/f?apikey=kenlie-apikey", {timeout:20000});
-let url = data.data || data.url || data.shoti;
-if(!url) throw new Error("no url");
-let vid = await axios.get(url, {responseType:"stream", timeout:30000});
-await api.sendMessage({ body: `💃 Shoti`, attachment: vid.data }, event.threadID);
-}catch(e){
+await message.reply("🎬 Loading shoti...");
+let apis = [
+"https://shoti-api.libyzxy0.workers.dev/api/get-shoti",
+"https://shoti.fbbot.org/api/get-shoti",
+"https://shoti-api2.vercel.app/api/shoti",
+"https://shoti-api-5kgg.onrender.com/api/get-shoti"
+];
+let data = null;
+for(let url of apis){
 try{
-let {data} = await axios.get("https://api.kenliejugarap.com/shoti/", {timeout:20000});
-let url = data.data?.shoti || data.shoti;
-let vid = await axios.get(url, {responseType:"stream"});
-await api.sendMessage({ attachment: vid.data }, event.threadID);
-}catch(err){ return api.sendMessage("❌ Shoti API sleeping, try after 2 mins", event.threadID); }
+let res = await axios.get(url, {timeout:10000});
+let d = res.data?.data || res.data;
+if(d && d.url){ data = d; break; }
+}catch(e){}
 }
+if(!data) return message.reply("❌ All shoti APIs sleeping, try again after 5 mins");
+let vid = await axios.get(data.url, {responseType:"stream", timeout:20000});
+await api.sendMessage({body:`😍 @${data.username || data.user?.username || "shoti"}`, attachment: vid.data}, event.threadID);
+}catch(e){ message.reply("❌ Shoti error: "+e.message); }
 }
 };
