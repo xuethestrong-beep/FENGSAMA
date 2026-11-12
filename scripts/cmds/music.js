@@ -6,7 +6,7 @@ const ytdl = require("@distube/ytdl-core");
 module.exports = {
   config: {
     name: "music",
-    version: "5.0-FINAL",
+    version: "5.1-FINAL",
     author: "Feng",
     role: 0,
     category: "music"
@@ -30,32 +30,14 @@ module.exports = {
       let video = search.videos[0];
       let url = `https://www.youtube.com/watch?v=${video.videoId}`;
 
-      let rawCookie = process.env.YT_COOKIE || "";
-      if (!rawCookie) throw new Error("No YT_COOKIE env");
+      let raw = process.env.YT_COOKIE;
+      if (!raw) throw new Error("No YT_COOKIE env");
 
-      let agent = null;
-      let headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" };
+      // Supports NEW JSON cookie format
+      let agent = ytdl.createAgent(JSON.parse(raw));
 
-      // Auto-detect cookie format
-      if (rawCookie.trim().startsWith("[")) {
-        // NEW format: JSON array
-        agent = ytdl.createAgent(JSON.parse(rawCookie));
-      } else {
-        // OLD format: string
-        headers.Cookie = rawCookie;
-      }
-
-      let options = {
-        filter: "audioonly",
-        quality: "highestaudio",
-        highWaterMark: 1 << 25,
-        requestOptions: { headers }
-      };
-      if (agent) options.agent = agent;
-
-      // Try with info first (more stable)
-      let info = await ytdl.getInfo(url, options);
-      let stream = ytdl.downloadFromInfo(info, options);
+      let info = await ytdl.getInfo(url, { agent });
+      let stream = ytdl.downloadFromInfo(info, { filter: "audioonly", quality: "highestaudio" });
 
       await new Promise((resolve, reject) => {
         let write = fs.createWriteStream(filePath);
