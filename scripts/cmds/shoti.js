@@ -3,30 +3,56 @@ const fs = require("fs-extra");
 const path = require("path");
 
 module.exports = {
-config: { name: "shoti", version: "11.0-FIX-UPLOAD", author: "Feng", role: 0, category: "FUN" },
+config: { name: "shoti", version: "14-AUTO-RETRY", author: "Feng", role: 0, category: "FUN" },
+
 onStart: async function({ api, event }){
-let tmp = path.join(__dirname, "cache", `shoti_${Date.now()}.mp4`);
+const cacheDir = path.join(__dirname, "cache");
+fs.ensureDirSync(cacheDir);
+
+let API = "https://feng-shoti-api-production.up.railway.app/api/shoti";
+let maxTries = 3;
+
+for(let attempt = 1; attempt <= maxTries; attempt++){
+let filePath = path.join(cacheDir, `shoti_${Date.now()}_${attempt}.mp4`);
 try{
-let MY_API = "https://feng-shoti-api-production.up.railway.app/api/shoti";
-let res = await axios.get(MY_API, {timeout:15000});
-let url = res.data.url || res.data.data?.url;
-if(!url) throw new Error("API no url");
+ let res = await axios.get(API, { timeout: 15000 });
+ let videoUrl = res.data.url;
+ let username = res.data.username || "shoti";
+ if(!videoUrl) continue;
 
-// Download as buffer, not stream
-let vid = await axios.get(url, {responseType:"arraybuffer", timeout:30000});
-fs.ensureDirSync(path.join(__dirname, "cache"));
-fs.writeFileSync(tmp, Buffer.from(vid.data));
+ // Download
+ let vid = await axios.get(videoUrl, { responseType: "arraybuffer", timeout: 30000 });
+ let buffer = Buffer.from(vid.data);
 
-api.sendMessage({
-body: `😍 @${res.data.username || "shoti"}`,
-attachment: fs.createReadStream(tmp)
-}, event.threadID, (err)=>{
-if(fs.existsSync(tmp)) fs.unlinkSync(tmp);
-});
+ // Skip if too big - try next
+ if(buffer.length > 26214400 || buffer.length < 5000){
+  console.log(`Attempt ${attempt}: size ${(buffer.length/1024/1024).toFixed(1)}MB - skip`);
+  continue;
+ }
+
+ fs.writeFileSync(filePath, buffer);
+
+ // Upload
+ await new Promise((resolve, reject)=>{
+  api.sendMessage({
+   body: `😍 @${username} | Try ${attempt}/${maxTries}`,
+   attachment: fs.createReadStream(filePath)
+  }, event.threadID, (err)=>{ if(err) reject(err); else resolve(); });
+ });
+
+ setTimeout(()=>{ if(fs.existsSync(filePath)) fs.unlinkSync(filePath); }, 5000);
+ return; // Success, stop loop
 
 }catch(e){
-if(fs.existsSync(tmp)) fs.unlinkSync(tmp);
-api.sendMessage(`❌ Upload Fix Error: ${e.message}\nIf 408 error, refresh your appstate.json`, event.threadID);
+ if(fs.existsSync(filePath)) fs.unlinkSync(filePath);
+ console.log(`Attempt ${attempt} failed: ${e.message}`);
+ // If last attempt, show error
+ if(attempt === maxTries){
+  return api.sendMessage(`❌ All ${maxTries} videos failed (FB Mercury bug). Type !shoti again. Error: ${e.message}`, event.threadID);
+ }
+ // else try next video
+ await new Promise(r=>setTimeout(r,1000));
+}
 }
 }
 };
