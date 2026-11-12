@@ -1,46 +1,47 @@
 const axios = require("axios");
-
 module.exports = {
-config: { name: "manga", aliases: ["manhwa","manhua","manwa"], version: "3.1-CLEAN-RAM", author: "Feng", role: 0, category: "anime", guide: "{pn} solo leveling 10" },
+config: { name: "manga", aliases: ["manhwa"], version: "4.1-SAFE-30", author: "Feng", role: 0, category: "anime" },
 onStart: async function({ api, event, args, message }) {
 let raw = args.join(" ").trim();
-if(!raw) return message.reply("Usage: !manga solo leveling 5");
-let chap = parseInt(raw.match(/(\d+)$/)?.[1] || 1);
-let nameRaw = raw.replace(/\s*\d+\s*$/,"").toLowerCase().trim();
-await message.reply(`📚 Loading ALL pages for ${nameRaw} ch.${chap}...`);
+let parts = raw.split(" ");
+let last = parts[parts.length-1];
+let range = last.includes("-") ? last : null;
+let chap = parseInt(raw.match(/(\d+)\s*$/i)?.[1] || 1);
+let nameRaw = raw.replace(/(\d+-\d+|\d+)\s*$/i,"").trim().toLowerCase();
+if(!nameRaw) return message.reply("Usage: !manga the servant is the demon king 10\nFor long chapter: !manga the servant is the demon king 10 1-30");
+
+// DEFAULT: only send first 30 to avoid crash
+let startPage = 1, endPage = 30;
+if(range){
+let [s,e] = range.split("-").map(n=>parseInt(n));
+startPage = s||1; endPage = e||30;
+}
+if(endPage - startPage > 40) endPage = startPage + 29; // max 30 pages
+
+await message.reply(`📚 Loading ch.${chap} pages ${startPage}-${endPage} (to prevent bot die)`);
 
 try{
-let sUrl = `https://api.mangadex.org/manga?title=${encodeURIComponent(nameRaw)}&limit=3`;
-let {data: sData} = await axios.get(sUrl, {timeout:15000});
-if(!sData.data.length) return message.reply(`❌ Not found: ${nameRaw}`);
+let {data: sData} = await axios.get(`https://api.mangadex.org/manga?title=${encodeURIComponent(nameRaw)}&limit=3`, {timeout:15000});
 let mangaId = sData.data[0].id;
 let title = sData.data[0].attributes.title.en || nameRaw;
-let cUrl = `https://api.mangadex.org/manga/${mangaId}/feed?translatedLanguage[]=en&order[chapter]=asc&limit=500`;
-let {data: cData} = await axios.get(cUrl, {timeout:15000});
+let {data: cData} = await axios.get(`https://api.mangadex.org/manga/${mangaId}/feed?translatedLanguage[]=en&order[chapter]=asc&limit=500`, {timeout:15000});
 let found = cData.data.find(c=> parseInt(c.attributes.chapter)==chap) || cData.data[chap-1];
-if(!found) return message.reply(`❌ Chapter ${chap} not found`);
 let {data: server} = await axios.get(`https://api.mangadex.org/at-home/server/${found.id}`, {timeout:15000});
-let host = server.baseUrl, hash = server.chapter.hash, pages = server.chapter.data;
-await message.reply(`📖 ${title} Ch.${chap} - Total ${pages.length} pages`);
+let host = server.baseUrl, hash = server.chapter.hash, allPages = server.chapter.data;
+let pages = allPages.slice(startPage-1, endPage);
 
-for(let start=0; start<pages.length; start+=5){
-let batch = pages.slice(start, start+5);
+for(let i=0;i<pages.length;i+=5){
+let batch = pages.slice(i,i+5);
 let attachments = [];
 for(let f of batch){
-try{
-let r = await axios.get(`${host}/data/${hash}/${f}`, {responseType:"stream", timeout:20000, headers:{"Referer":"https://mangadex.org/"}});
+let r = await axios.get(`${host}/data/${hash}/${f}`, {responseType:"stream", timeout:15000, headers:{"Referer":"https://mangadex.org/"}});
 attachments.push(r.data);
-}catch(e){}
 }
-if(attachments.length>0){
-await api.sendMessage({ body: `📖 ${title} Ch.${chap} [${start+1}-${Math.min(start+5,pages.length)}/${pages.length}]`, attachment: attachments }, event.threadID);
-}
-// CLEAN RAM AFTER EACH BATCH
+await api.sendMessage({ body: `📖 ${title} Ch.${chap} [${startPage+i}-${Math.min(startPage+i+4,endPage)}/${allPages.length}]`, attachment: attachments }, event.threadID);
 attachments = null;
-if(global.gc) global.gc();
-await new Promise(r=>setTimeout(r,1200));
+await new Promise(r=>setTimeout(r,4000));
 }
-await message.reply(`✅ Done! ${title} Ch.${chap} - ${pages.length} pages - Cache cleared!`);
-}catch(e){ return message.reply(`❌ Error: ${e.message}`); }
+await message.reply(`✅ Done ${startPage}-${endPage}/${allPages.length}\nTo read next: !manga ${nameRaw} ${chap} ${endPage+1}-${endPage+30}\n\nRAM cleared!`);
+}catch(e){ return message.reply(`❌ ${e.message}`); }
 }
 };
