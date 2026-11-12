@@ -1,65 +1,83 @@
 const yts = require("yt-search");
 const fs = require("fs-extra");
 const path = require("path");
-const ytdl = require("@distube/ytdl-core");
-
+const play = require("play-dl");
+const { randomUUID } = require("crypto");
+const MAX_DURATION = 600;
+const MAX_SIZE = 25 * 1024 * 1024;
+const SEARCH_TIMEOUT = 15000;
+const INFO_TIMEOUT = 20000;
+const DOWNLOAD_TIMEOUT = 60000;
+function withTimeout(promise, ms, label) {
+  let t;
+  const timeout = new Promise((_, reject) => { t = setTimeout(() => reject(new Error(`${label} timeout`)), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
+}
+async function safeUnsend(api, id) {
+  if (!id) return;
+  try { await api.unsendMessage(id); } catch (e) { console.log("Unsend failed:", e.message); }
+}
+async function downloadWithLimit(stream, filePath) {
+  let bytes = 0;
+  await withTimeout(new Promise((resolve, reject) => {
+    const write = fs.createWriteStream(filePath);
+    const onData = (chunk) => {
+      bytes += chunk.length;
+      if (bytes > MAX_SIZE) {
+        try { stream.destroy(); } catch {}
+        try { write.destroy(); } catch {}
+        reject(new Error("Audio >25MB"));
+      }
+    };
+    stream.on("data", onData);
+    stream.on("error", (e) => { try { write.destroy(); } catch {} reject(e); });
+    write.on("error", reject);
+    write.on("finish", resolve);
+    stream.pipe(write);
+  }), DOWNLOAD_TIMEOUT, "Download");
+}
 module.exports = {
-  config: {
-    name: "music",
-    version: "5.1-FINAL",
-    author: "Feng",
-    role: 0,
-    category: "music"
-  },
-  onStart: async function({ api, event, args, message }) {
-    let query = args.join(" ");
+  config: { name: "music", aliases: ["song", "play"], version: "6.1-fixed", author: "Feng - Fixed", role: 0, countDown: 10, category: "music", description: "Search and download music from YouTube", guide: "{pn} <song name>" },
+  onStart: async function ({ api, event, args, message }) {
+    const query = args.join(" ").trim();
     if (!query) return message.reply("Use: !music <song name>");
-    
-    let filePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
-    fs.ensureDirSync(path.join(__dirname, "cache"));
-    
+    if (query.length > 200) return message.reply("Query too long");
+    const filePath = path.join(__dirname, "cache", `${Date.now()}_${randomUUID().slice(0, 6)}.mp3`);
+    try { fs.ensureDirSync(path.join(__dirname, "cache")); } catch {}
     let tmpMsg = null;
     try {
-      let s = await api.sendMessage(`🔍 Searching: ${query}...`, event.threadID);
-      tmpMsg = s.messageID;
+      const s = await api.sendMessage(`🔍 Searching: ${query}...`, event.threadID);
+      tmpMsg = s?.messageID || null;
     } catch {}
-
     try {
-      let search = await yts(query);
-      if (!search.videos.length) throw new Error("No results");
-      let video = search.videos[0];
-      let url = `https://www.youtube.com/watch?v=${video.videoId}`;
-
-      let raw = process.env.YT_COOKIE;
-      if (!raw) throw new Error("No YT_COOKIE env");
-
-      // Supports NEW JSON cookie format
-      let agent = ytdl.createAgent(JSON.parse(raw));
-
-      let info = await ytdl.getInfo(url, { agent });
-      let stream = ytdl.downloadFromInfo(info, { filter: "audioonly", quality: "highestaudio" });
-
-      await new Promise((resolve, reject) => {
-        let write = fs.createWriteStream(filePath);
-        stream.pipe(write);
-        write.on("finish", resolve);
-        write.on("error", reject);
-        stream.on("error", reject);
-      });
-
-      if (tmpMsg) api.unsendMessage(tmpMsg);
-      
-      await message.reply({
-        attachment: fs.createReadStream(filePath)
-      }, () => {
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      });
-
+      const search = await withTimeout(yts(query), SEARCH_TIMEOUT, "Search");
+      if (!search?.videos?.length) throw new Error("No results");
+      const video = search.videos[0];
+      if (!video?.videoId) throw new Error("No results");
+      if (video.duration?.seconds && video.duration.seconds > MAX_DURATION) throw new Error(`Video too long: ${Math.floor(video.duration.seconds / 60)}m (max 10m)`);
+      const url = `https://www.youtube.com/watch?v=${video.videoId}`;
+      const yt_info = await withTimeout(play.video_info(url), INFO_TIMEOUT, "Video info");
+      const streamInfo = await withTimeout(play.stream_from_info(yt_info), INFO_TIMEOUT, "Stream info");
+      if (!streamInfo?.stream) throw new Error("No stream");
+      await downloadWithLimit(streamInfo.stream, filePath);
+      const stat = await fs.stat(filePath);
+      if (!stat.size || stat.size > MAX_SIZE) throw new Error("Audio >25MB or empty");
+      await safeUnsend(api, tmpMsg);
+      tmpMsg = null;
+      await message.reply({ body: `🎵 ${video.title}\n👤 ${video.author?.name || "Unknown"}`, attachment: fs.createReadStream(filePath) });
     } catch (e) {
-      console.log("MUSIC ERROR:", e.message);
-      if (tmpMsg) api.unsendMessage(tmpMsg);
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return message.reply("⚠️ This command is currently down at the moment. Please try again later.");
+      const msg = String(e?.message || e);
+      console.log("MUSIC ERROR:", msg);
+      await safeUnsend(api, tmpMsg);
+      let userMsg = "⚠️ Music failed, please try again later.";
+      if (msg.includes("No results")) userMsg = "❌ No results found.";
+      else if (msg.includes("too long")) userMsg = `❌ ${msg}`;
+      else if (msg.includes(">25MB")) userMsg = "❌ Audio too large (>25MB), try a shorter song.";
+      else if (msg.includes("timeout")) userMsg = "⏳ YouTube timed out, please try again.";
+      else if (msg.includes("403") || msg.includes("Sign in") || msg.includes("bot")) userMsg = "⚠️ YouTube blocked this request (403), try again later.";
+      return message.reply(userMsg);
+    } finally {
+      try { if (await fs.pathExists(filePath)) await fs.unlink(filePath); } catch {}
     }
   }
 };
