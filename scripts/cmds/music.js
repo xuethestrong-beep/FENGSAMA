@@ -79,26 +79,30 @@ async function processSong({ message, video, stapi }) {
     await message.reply(`❌ Music error: ${err.message}`);
   } finally { removeFile(file); }
 }
+
+async function startFunction({ message, args, event }) {
+  if (!args?.length) return message.reply("🎵 Usage: music <song> | music -s <song>");
+  let showList = false; if (args[0] === "-s") { showList = true; args.shift(); }
+  const query = args.join(" ").trim(); if (!query) return message.reply("❌ Enter song name");
+  let processing;
+  try {
+    processing = await message.reply(`🔍 Searching "${query}"...`);
+    const search = await yts(query); const videos = search?.videos || [];
+    if (!videos.length) { await safeUnsend(message, processing?.messageID); return message.reply("❌ No results"); }
+    if (!showList) { await safeUnsend(message, processing?.messageID); const stapi = new global.utils.STBotApis(); return processSong({ message, video: videos[0], stapi }); }
+    const top = videos.slice(0,6); let out = `🔍 Results for "${query}"\n\n`;
+    top.forEach((v,i)=>{ out += `${i+1}. ${v.title}\n👤 ${v.author?.name||"Unknown"}\n⏱ ${v.timestamp||"?"}\n\n`; });
+    out += `👉 Reply 1-${top.length}`;
+    await safeUnsend(message, processing?.messageID);
+    const info = await message.reply(out);
+    if (info?.messageID && global.GoatBot?.onReply) global.GoatBot.onReply.set(info.messageID, { commandName: module.exports.config.name, author: event.senderID, videos: top });
+  } catch (err) { console.error("[MUSIC] Search error:", err); await safeUnsend(message, processing?.messageID); return message.reply("❌ Search failed: " + (err.message||"unknown")); }
+}
+
 module.exports = {
-  config: { name: "music", aliases: ["song"], version: "2.5.0-nocooldown", author: "ST Fixed", role: 0, category: "music" },
-  ST: async function ({ message, args, event }) {
-    if (!args?.length) return message.reply("🎵 Usage: music <song> | music -s <song>");
-    let showList = false; if (args[0] === "-s") { showList = true; args.shift(); }
-    const query = args.join(" ").trim(); if (!query) return message.reply("❌ Enter song name");
-    let processing;
-    try {
-      processing = await message.reply(`🔍 Searching "${query}"...`);
-      const search = await yts(query); const videos = search?.videos || [];
-      if (!videos.length) { await safeUnsend(message, processing?.messageID); return message.reply("❌ No results"); }
-      if (!showList) { await safeUnsend(message, processing?.messageID); const stapi = new global.utils.STBotApis(); return processSong({ message, video: videos[0], stapi }); }
-      const top = videos.slice(0,6); let out = `🔍 Results for "${query}"\n\n`;
-      top.forEach((v,i)=>{ out += `${i+1}. ${v.title}\n👤 ${v.author?.name||"Unknown"}\n⏱ ${v.timestamp||"?"}\n\n`; });
-      out += `👉 Reply 1-${top.length}`;
-      await safeUnsend(message, processing?.messageID);
-      const info = await message.reply(out);
-      if (info?.messageID && global.GoatBot?.onReply) global.GoatBot.onReply.set(info.messageID, { commandName: module.exports.config.name, author: event.senderID, videos: top });
-    } catch (err) { console.error("[MUSIC] Search error:", err); await safeUnsend(message, processing?.messageID); return message.reply("❌ Search failed: " + (err.message||"unknown")); }
-  },
+  config: { name: "music", aliases: ["song"], version: "2.5.0-final-fixed", author: "ST Fixed", role: 0, category: "music" },
+  onStart: startFunction,
+  ST: startFunction,
   onReply: async function ({ message, event, Reply }) {
     if (String(event.senderID) !== String(Reply.author)) return message.reply("⚠️ Not your request");
     const choice = parseInt(String(event.body||"").trim(),10);
