@@ -1,99 +1,71 @@
+// Use your cookie code but fixed
 const yts = require("yt-search");
-const fs = require("fs");
+const fs = require("fs-extra");
 const path = require("path");
 const axios = require("axios");
 const ytdl = require("@distube/ytdl-core");
 
 module.exports = {
-config: {
-name: "music",
-aliases: ["play","song","yt"],
-version: "3.0-CLEAN-DELETE",
-author: "Feng",
-role: 0,
-category: "music",
-guide: "{pn} take all the love"
-},
-onStart: async function({ api, event, args, message }) {
+config: { name: "music", version: "3.1-YT-COOKIE-FIXED", author: "Feng", role: 0, category: "music" },
+onStart: async function({ api, event, args, message }){
 let query = args.join(" ");
-if(!query) return message.reply("Usage: !music take all the love");
+if(!query) return message.reply("Usage: !music <song>");
 
+let filePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
+fs.ensureDirSync(path.join(__dirname, "cache"));
 let tmpMsg = null;
-let filePath = "";
 
 try{
-// 1. Send 1 searching msg and SAVE its ID to delete later
 let sent = await api.sendMessage(`🔍 Searching: ${query}...`, event.threadID);
 tmpMsg = sent.messageID;
 
 let search = await yts(query);
-if(!search.videos.length) {
-if(tmpMsg) api.unsendMessage(tmpMsg);
-return api.sendMessage("❌ No results", event.threadID);
-}
 let video = search.videos[0];
 let url = `https://www.youtube.com/watch?v=${video.videoId}`;
-filePath = path.join(__dirname, `../../tmp/${Date.now()}.mp3`);
 
-// 2. Download using your Railway cookie
-let cookie = process.env.YT_COOKIE || process.env.COOKIE || process.env.YOUTUBE_COOKIE || "";
-if(!cookie) {
-if(tmpMsg) api.unsendMessage(tmpMsg);
-return api.sendMessage("❌ No YT_COOKIE found in Railway Variables", event.threadID);
-}
+// FIX: Read cookie correctly
+let cookie = process.env.YT_COOKIE || "";
+if(!cookie) throw new Error("No YT_COOKIE in Variables");
 
-let agent = ytdl.createAgent(JSON.parse(cookie.startsWith("[") ? cookie : `[{"name":"__Secure-3PSID","value":"${cookie}","domain":".youtube.com"}]`).length ? cookie : `[]`), cookie.includes("netscape") ? undefined : undefined);
+let agent = undefined;
+try{
+  // If it's JSON array
+  if(cookie.trim().startsWith("[")){
+    agent = ytdl.createAgent(JSON.parse(cookie));
+  }
+} catch(e){}
 
-// Simple cookie header method - works best
-const stream = ytdl(url, {
-filter: "audioonly",
-quality: "highestaudio",
-highWaterMark: 1 << 25,
-requestOptions: { headers: { Cookie: cookie, "User-Agent": "Mozilla/5.0" } }
+let options = {
+ filter: "audioonly",
+ quality: "highestaudio",
+ highWaterMark: 1 << 25,
+ requestOptions: { headers: { "User-Agent": "Mozilla/5.0", Cookie: cookie } }
+};
+if(agent) options.agent = agent;
+
+const stream = ytdl(url, options);
+let write = fs.createWriteStream(filePath);
+stream.pipe(write);
+
+await new Promise((res, rej)=>{
+ write.on("finish", res);
+ write.on("error", rej);
+ stream.on("error", rej);
 });
 
-let writeStream = fs.createWriteStream(filePath);
-stream.pipe(writeStream);
-
-await new Promise((res, rej) => {
-writeStream.on("finish", res);
-writeStream.on("error", rej);
-stream.on("error", rej);
-});
-
-// 3. Send song
 await api.sendMessage({
-body: `🎧 ${video.title}\n⏱️ ${video.timestamp}`,
-attachment: fs.createReadStream(filePath)
-}, event.threadID, () => {
-if(fs.existsSync(filePath)) fs.unlinkSync(filePath);
+ body: `🎧 ${video.title} | Cookie Mode ✅`,
+ attachment: fs.createReadStream(filePath)
+}, event.threadID, ()=>{
+ if(fs.existsSync(filePath)) fs.unlinkSync(filePath);
 });
 
-// 4. DELETE the "Searching..." message = clean!
-if(tmpMsg) {
-setTimeout(() => api.unsendMessage(tmpMsg), 1000);
-}
+if(tmpMsg) api.unsendMessage(tmpMsg);
 
 }catch(e){
-// If ytdl-core fails, try backup API
-try{
-let backupUrl = `https://api.ryzendesu.vip/api/downloader/ytmp3?url=https://www.youtube.com/watch?v=${(await yts(query)).videos[0].videoId}`;
-let {data} = await axios.get(backupUrl, {timeout:20000});
-let audioUrl = data.result || data.url || data.downloadUrl;
-if(audioUrl){
-let audioStream = await axios.get(audioUrl, {responseType:"stream", timeout:30000});
-let writer = fs.createWriteStream(filePath);
-audioStream.data.pipe(writer);
-await new Promise(r=>writer.on("finish",r));
-await api.sendMessage({ body: `🎧 ${query}`, attachment: fs.createReadStream(filePath)}, event.threadID, ()=>{
 if(fs.existsSync(filePath)) fs.unlinkSync(filePath);
 if(tmpMsg) api.unsendMessage(tmpMsg);
-});
-return;
-}
-}catch(err2){}
-if(tmpMsg) api.unsendMessage(tmpMsg);
-return api.sendMessage(`❌ Download failed: ${e.message}\nYour YT_COOKIE might be expired. Re-copy from YouTube > F12 > Application > Cookies > Copy __Secure-3PSID`, event.threadID);
+return api.sendMessage(`❌ YT_COOKIE Expired or Invalid\n${e.message}\n\nRe-copy new cookie from YouTube and update Railway Variables -> YT_COOKIE -> Redeploy`, event.threadID);
 }
 }
 };
