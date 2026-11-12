@@ -6,7 +6,7 @@ const ytdl = require("@distube/ytdl-core");
 module.exports = {
   config: {
     name: "music",
-    version: "3.4-FIXED",
+    version: "5.0-FINAL",
     author: "Feng",
     role: 0,
     category: "music"
@@ -14,49 +14,49 @@ module.exports = {
   onStart: async function({ api, event, args, message }) {
     let query = args.join(" ");
     if (!query) return message.reply("Use: !music <song name>");
-
+    
     let filePath = path.join(__dirname, "cache", `${Date.now()}.mp3`);
     fs.ensureDirSync(path.join(__dirname, "cache"));
     
     let tmpMsg = null;
     try {
-      let sent = await api.sendMessage(`🔍 Searching: ${query}...`, event.threadID);
-      tmpMsg = sent.messageID;
+      let s = await api.sendMessage(`🔍 Searching: ${query}...`, event.threadID);
+      tmpMsg = s.messageID;
     } catch {}
 
     try {
-      // 1. Search
       let search = await yts(query);
       if (!search.videos.length) throw new Error("No results");
       let video = search.videos[0];
       let url = `https://www.youtube.com/watch?v=${video.videoId}`;
 
-      // 2. Cookie
-      let cookie = process.env.YT_COOKIE || "";
-      if (!cookie) throw new Error("No cookie");
-      
-      let agent;
-      try {
-        if (cookie.trim().startsWith("[")) {
-          agent = ytdl.createAgent(JSON.parse(cookie));
-        }
-      } catch {}
+      let rawCookie = process.env.YT_COOKIE || "";
+      if (!rawCookie) throw new Error("No YT_COOKIE env");
 
-      // 3. Download
-      let opts = {
+      let agent = null;
+      let headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" };
+
+      // Auto-detect cookie format
+      if (rawCookie.trim().startsWith("[")) {
+        // NEW format: JSON array
+        agent = ytdl.createAgent(JSON.parse(rawCookie));
+      } else {
+        // OLD format: string
+        headers.Cookie = rawCookie;
+      }
+
+      let options = {
         filter: "audioonly",
         quality: "highestaudio",
         highWaterMark: 1 << 25,
-        requestOptions: {
-          headers: {
-            Cookie: cookie,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-          }
-        }
+        requestOptions: { headers }
       };
-      if (agent) opts.agent = agent;
+      if (agent) options.agent = agent;
 
-      const stream = ytdl(url, opts);
+      // Try with info first (more stable)
+      let info = await ytdl.getInfo(url, options);
+      let stream = ytdl.downloadFromInfo(info, options);
+
       await new Promise((resolve, reject) => {
         let write = fs.createWriteStream(filePath);
         stream.pipe(write);
@@ -65,7 +65,6 @@ module.exports = {
         stream.on("error", reject);
       });
 
-      // 4. Success - delete searching, reply with mp3 only
       if (tmpMsg) api.unsendMessage(tmpMsg);
       
       await message.reply({
