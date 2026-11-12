@@ -43,6 +43,7 @@
     "passport-local": "^1.0.0",
     "path": "^0.12.7",
     "play-dl": "^1.9.7",
+    "https-proxy-agent": "^7.0.5",
     "qrcode-reader": "^1.0.4",
     "qs": "^6.11.0",
     "request": "^2.88.2",
