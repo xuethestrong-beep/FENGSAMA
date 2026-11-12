@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 module.exports = {
-  config: { name: "manga2", aliases: ["comics","manhwa"], version: "6.0-SILENT", author: "Feng", role: 0, category: "anime" },
+  config: { name: "manga2", aliases: ["comics2","manhwa2"], version: "6.0-SILENT", author: "Feng", role: 0, category: "anime" },
   onStart: async function({ args, message }){
     try{
       if(!args[0]) return message.reply("Use: !manga2 solo leveling 1");
