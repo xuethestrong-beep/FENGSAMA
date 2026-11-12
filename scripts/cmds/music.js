@@ -1,96 +1,108 @@
 const yts = require("yt-search");
-const fs = require("fs");
+const fs = require("fs-extra");
 const path = require("path");
-const ytdl = require("@distube/ytdl-core");
-const { HttpsProxyAgent } = require("https-proxy-agent");
+const { randomUUID } = require("crypto");
+const ytdlp = require("yt-dlp-exec");
 
-const CACHE_DIR = path.join(__dirname, "cache");
+const MAX_DURATION = 600;
 const MAX_SIZE = 25 * 1024 * 1024;
+const CACHE = path.join(__dirname, "cache");
 
-const RAW_PROXY = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTP_PRO || process.env.HTTPS_PROXY || null;
-function cleanProxy(url) {
-  if (!url) return null;
-  try { return new URL(url.trim().replace(/^["']|["']$/g, "")).toString(); } catch { return url; }
-}
-const PROXY_URL = cleanProxy(RAW_PROXY);
-let agent = undefined;
-if (PROXY_URL) {
-  try { agent = new HttpsProxyAgent(PROXY_URL); console.log("[MUSIC] Proxy:", PROXY_URL.replace(/:[^:@]*@/, ":****@")); }
-  catch (e) { console.log("[MUSIC] Proxy fail:", e.message); }
-}
+const RAW_PROXY = process.env.PROXY_URL || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || null;
+const PROXY = RAW_PROXY ? RAW_PROXY.trim().replace(/^["']|["']$/g, "") : null;
 
-async function safeUnsend(m, id) { if (!id) return; try { await m.unsend(id); } catch {} }
-function removeFile(f) { try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch {} }
-
-async function downloadWithYTDL(videoURL) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-  const file = path.join(CACHE_DIR, `music_${Date.now()}_${Math.random().toString(36).slice(2,6)}.mp3`);
-  return new Promise((resolve, reject) => {
-    const opts = {
-      filter: "audioonly",
-      quality: "highestaudio",
-      highWaterMark: 1 << 25,
-      requestOptions: agent ? { agent } : {}
-    };
-    let size = 0;
-    const stream = ytdl(videoURL, opts);
-    const write = fs.createWriteStream(file);
-    stream.on("data", chunk => {
-      size += chunk.length;
-      if (size > MAX_SIZE) { stream.destroy(); write.destroy(); removeFile(file); reject(new Error("File >25MB")); }
-    });
-    stream.pipe(write);
-    write.on("finish", () => resolve(file));
-    write.on("error", e => { removeFile(file); reject(e); });
-    stream.on("error", e => { removeFile(file); reject(e); });
+function withTimeout(promise, ms, label) {
+  let t;
+  const timeout = new Promise((_, reject) => {
+    t = setTimeout(() => reject(new Error(`${label} timeout`)), ms);
   });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
 }
-
-async function processSong({ message, video }) {
-  let file, procMsg;
-  try {
-    procMsg = await message.reply(`⬇️ Downloading: ${video.title}`);
-    file = await downloadWithYTDL(video.url);
-    await safeUnsend(message, procMsg?.messageID);
-    await message.reply({
-      body: `🎶 ${video.title}\n👤 ${video.author?.name||"Unknown"}\n⏱ ${video.timestamp||"?"}`,
-      attachment: fs.createReadStream(file)
-    });
-  } catch (err) {
-    console.error("[MUSIC] Error:", err.message);
-    await safeUnsend(message, procMsg?.messageID);
-    const msg = err.message.includes("403") ? "YouTube blocked. Proxy may be dead, try again." : err.message.includes("410") ? "Video unavailable" : err.message;
-    await message.reply(`❌ Music error: ${msg}`);
-  } finally { removeFile(file); }
-}
-
-async function startFunction({ message, args, event }) {
-  if (!args?.length) return message.reply("🎵 Usage: music <song> | music -s <song>");
-  let showList = false; if (args[0] === "-s") { showList = true; args.shift(); }
-  const query = args.join(" ").trim(); if (!query) return message.reply("❌ Enter song name");
-  let processing;
-  try {
-    processing = await message.reply(`🔍 Searching "${query}"...`);
-    const search = await yts(query); const videos = search?.videos || [];
-    if (!videos.length) { await safeUnsend(message, processing?.messageID); return message.reply("❌ No results"); }
-    if (!showList) { await safeUnsend(message, processing?.messageID); return processSong({ message, video: videos[0] }); }
-    const top = videos.slice(0,6); let out = `🔍 Results for "${query}"\n\n`;
-    top.forEach((v,i)=>{ out += `${i+1}. ${v.title}\n👤 ${v.author?.name||"Unknown"}\n⏱ ${v.timestamp||"?"}\n\n`; });
-    out += `👉 Reply 1-${top.length}`;
-    await safeUnsend(message, processing?.messageID);
-    const info = await message.reply(out);
-    if (info?.messageID && global.GoatBot?.onReply) global.GoatBot.onReply.set(info.messageID, { commandName: module.exports.config.name, author: event.senderID, videos: top });
-  } catch (err) { console.error("[MUSIC] Search error:", err); await safeUnsend(message, processing?.messageID); return message.reply("❌ Search failed: " + err.message); }
+async function safeUnsend(api, id) {
+  if (!id) return;
+  try { await api.unsendMessage(id); } catch {}
 }
 
 module.exports = {
-  config: { name: "music", aliases: ["song"], version: "3.0-ytdl-proxy", author: "ST Fixed", role: 0, category: "music" },
-  onStart: startFunction,
-  ST: startFunction,
-  onReply: async function ({ message, event, Reply }) {
-    if (String(event.senderID) !== String(Reply.author)) return message.reply("⚠️ Not your request");
-    const choice = parseInt(String(event.body||"").trim(),10);
-    if (!Number.isInteger(choice) || choice<1 || choice>Reply.videos.length) return message.reply(`❌ Reply 1-${Reply.videos.length}`);
-    return processSong({ message, video: Reply.videos[choice-1] });
-  }
+  config: {
+    name: "music",
+    aliases: ["song", "play"],
+    version: "6.3-ytdlp-proxy",
+    author: "Feng - Fixed",
+    role: 0,
+    countDown: 10,
+    category: "music",
+    description: "Search and download music",
+    guide: "{pn} <song name>"
+  },
+  onStart: async function ({ api, event, args, message }) {
+    const query = args.join(" ").trim();
+    if (!query) return message.reply("Use: !music <song name>");
+    if (query.length > 200) return message.reply("Query too long");
+
+    const filePath = path.join(CACHE, `${Date.now()}_${randomUUID().slice(0, 6)}.mp3`);
+    try { fs.ensureDirSync(CACHE); } catch {}
+
+    let tmpMsg = null;
+    try {
+      const s = await api.sendMessage(`🔍 Searching: ${query}${PROXY ? " [proxy]" : ""}...`, event.threadID);
+      tmpMsg = s?.messageID || null;
+    } catch {}
+
+    try {
+      const search = await withTimeout(yts(query), 15000, "Search");
+      if (!search?.videos?.length) throw new Error("No results");
+      const video = search.videos[0];
+      if (video.duration?.seconds && video.duration.seconds > MAX_DURATION)
+        throw new Error(`Video too long: ${Math.floor(video.duration.seconds / 60)}m (max 10m)`);
+
+      const url = `https://www.youtube.com/watch?v=${video.videoId}`;
+
+      // yt-dlp options with proxy
+      const opts = {
+        extractAudio: true,
+        audioFormat: "mp3",
+        audioQuality: 0,
+        output: filePath,
+        noPlaylist: true,
+        maxFilesize: "25M",
+        quiet: true,
+        noWarnings: true,
+        addHeader: ["User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"],
+        // add proxy if available
+        ...(PROXY ? { proxy: PROXY } : {})
+      };
+
+      console.log("[MUSIC] Downloading:", video.title, "Proxy:", !!PROXY);
+      await withTimeout(ytdlp(url, opts), 90000, "Download");
+
+      const stat = await fs.stat(filePath);
+      if (!stat.size || stat.size > MAX_SIZE) throw new Error("Audio >25MB or empty");
+
+      await safeUnsend(api, tmpMsg);
+      tmpMsg = null;
+
+      await message.reply({
+        body: `🎵 ${video.title}\n👤 ${video.author?.name || "Unknown"}\n⏱ ${video.timestamp || ""}`,
+        attachment: fs.createReadStream(filePath)
+      });
+
+    } catch (e) {
+      const msg = String(e?.message || e);
+      console.log("MUSIC ERROR:", msg);
+      await safeUnsend(api, tmpMsg);
+      let userMsg = "⚠️ Music failed, please try again later.";
+      if (msg.includes("No results")) userMsg = "❌ No results found.";
+      else if (msg.includes("too long")) userMsg = `❌ ${msg}`;
+      else if (msg.includes(">25MB") || msg.includes("empty")) userMsg = "❌ Audio too large (>25MB) or empty, try shorter song.";
+      else if (msg.includes("timeout")) userMsg = "⏳ YouTube timed out, please try again.";
+      else if (msg.includes("403") || msg.includes("Sign in") || msg.includes("bot") || msg.includes("Forbidden")) userMsg = "⚠️ YouTube blocked (403). Proxy may be down. Try again or check PROXY_URL.";
+      else userMsg = `❌ Music error: ${msg.slice(0, 150)}`;
+      return message.reply(userMsg);
+    } finally {
+      try { if (await fs.pathExists(filePath)) await fs.unlink(filePath); } catch {}
+    }
+  },
+  // For ST-BOT compatibility
+  ST: async function (props) { return module.exports.onStart(props); }
 };
