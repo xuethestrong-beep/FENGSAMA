@@ -4,68 +4,62 @@ const cheerio = require("cheerio");
 module.exports = {
 config: {
 name: "novel",
-aliases: ["read"],
-version: "7.4-FINAL",
+aliases: ["read","novels"],
+version: "8.0-UNIVERSAL",
 author: "Feng",
 role: 0,
-shortDescription: "MP clean + RI fixed",
+shortDescription: "Any novel LOTM/MP/RI",
 category: "books",
-guide: "{pn} martial peak 8 | {pn} reverend insanity 18"
+guide: "{pn} lotm 5 | {pn} martial peak 8 | {pn} reverend insanity 18"
 },
 onStart: async function({ api, event, args, message }) {
-if(!args[0]) return message.reply("Use: !novel martial peak 8");
+if(!args[0]) return message.reply("Use: !novel lotm 5\n!novel martial peak 8\n!novel reverend insanity 18\n!novel solo leveling 1");
 
 let raw = args.join(" ");
 let chap = parseInt(raw.match(/(\d+)\s*$/i)?.[1] || 1);
-let name = raw.replace(/(?:chap|chapter|c)\s*\d+\s*$/i,"").replace(/\s*\d+\s*$/,"").trim().toLowerCase();
-let isRI = name.includes("reverend") || name.includes("insanity");
-let isMP = name.includes("martial peak");
+let nameRaw = raw.replace(/(?:chap|chapter|c)\s*\d+\s*$/i,"").replace(/\s*\d+\s*$/,"").trim().toLowerCase();
+let name = nameRaw;
+if(name.includes("lotm")) name = "lord of the mysteries";
+if(name.includes("martial peak")) name = "martial peak";
+if(name.includes("reverend insanity")) name = "reverend insanity";
 
-let readingMsg = await message.reply(`📚 Reading ${name} chap ${chap}...`);
+let readingMsg = await message.reply(`📚 Reading ${nameRaw} chap ${chap}...`);
 let readingID = readingMsg ? readingMsg.messageID : null;
 
-function CLEAN(text){
+function CLEAN(text, keepLong=true){
 if(!text) return "";
-// Cut off at the spam footer - THIS FIXES YOUR SCREENSHOT
-let cutMarkers = [
-"You can support the novel",
-"Subscribe Follow",
-"Follow on Patreon",
-"Follow on Feedly",
-"Previous Next",
-"Bookmark",
-'{"thumbnail"',
-'"link":'
-];
-for(let marker of cutMarkers){
-let idx = text.indexOf(marker);
-if(idx !== -1) text = text.substring(0, idx);
-}
+// DON'T cut if text is short (fixes blank bug from last version)
+if(text.length < 500) return text.replace(/https?:\/\/\S+/g,"").trim();
+
+// Only cut footer, not story
+let footer = text.toLowerCase().indexOf("you can support the novel");
+if(footer > text.length*0.6) text = text.substring(0, footer); // only cut if at 60%+ end
+
 return text
-.replace(/https?:\/\/[^\s]+/g, "")
-.replace(/www\.[^\s]+/g, "")
-.replace(/Translator:.*|Editor:.*|Proofreader:.*|Divine Dao Library/gi, "")
-.replace(/Ben:.*|Silavin:.*|\(Ben:.*\)/gi, "") // removes (Ben: GG I had high hopes...)
-.replace(/\s+/g, " ")
+.replace(/Follow on Patreon.*|Follow on Feedly.*|Follow on Inoreader.*|Bookmark.*|Previous Next.*/gi,"")
+.replace(/\{"thumbnail".*\}/gs,"")
+.replace(/Translator:.*|Editor:.*|Divine Dao Library/gi,"")
+.replace(/https?:\/\/[^\s]+/g,"")
+.replace(/\s+/g," ")
 .trim();
 }
 
-async function getWithProxy(targetUrl, selectors){
+async function fetchViaProxy(url, selectors){
 const proxies = [
-`https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
-`https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
-targetUrl
+`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+`https://corsproxy.io/?${encodeURIComponent(url)}`,
+url
 ];
-for(let url of proxies){
+for(let pUrl of proxies){
 try{
-let {data} = await axios.get(url, {timeout: 12000, headers: {"User-Agent":"Mozilla/5.0"}});
+let {data} = await axios.get(pUrl, {timeout:12000, headers: {"User-Agent":"Mozilla/5.0"}});
 let html = typeof data === "string" ? data : (data.contents || "");
-if(!html || html.length < 300) continue;
+if(!html || html.length < 400) continue;
 const $ = cheerio.load(html);
-$("script, style, noscript, iframe, .sharedaddy, .post-navigation, .jp-relatedposts").remove();
+$("script, style, noscript, iframe").remove();
 for(let sel of selectors){
 let t = $(sel).text();
-if(t && t.length > 400) return CLEAN(t);
+if(t && t.length > 300) return CLEAN(t);
 }
 }catch(e){ continue; }
 }
@@ -73,68 +67,70 @@ return null;
 }
 
 let text = null;
+let slug = name.replace(/\s+/g,"-");
 
-if(isRI){
-// NEW: Try 3 different RI sources, archive method improved
-// 1. AsuraScans via proxy (most reliable for RI 18)
-text = await getWithProxy(`https://asurascans.com/reverend-insanity-chapter-${chap}`, [".chapter-content",".entry-content","article","#content","p"]);
-// 2. Novelfull (has RI)
-if(!text) text = await getWithProxy(`https://novelfull.com/reverend-insanity/chapter-${chap}.html`, [".chapter-content","#chapter-content"]);
-// 3. Archive.org - FIXED for chap 18 (regex was failing)
-if(!text){
+// 1. MARTIAL PEAK - Divine Dao with paragraph filter (fixes blank)
+if(name.includes("martial peak")){
 try{
-let {data} = await axios.get(`https://api.allorigins.win/raw?url=${encodeURIComponent("https://ia800805.us.archive.org/32/items/reverend-insanity/Reverend%20Insanity.txt")}`, {timeout:15000});
-let full = typeof data === "string" ? data : (data.contents || "");
-// Better search: find "Chapter 18" with any separator
-let regex = new RegExp(`Chapter\\s+0*${chap}[\\s\\-–:]+[^\\n]*\\n`, "i");
-let m = full.match(regex);
-if(m){
-let start = full.indexOf(m[0]);
-let nextRegex = new RegExp(`\\nChapter\\s+0*${chap+1}[\\s\\-–:]+`, "i");
-let nextMatch = full.substring(start+100).match(nextRegex);
-let end = nextMatch ? start+100+nextMatch.index : start+15000;
-text = CLEAN(full.substring(start, Math.min(end, start+15000)));
-}
-}catch(e){ console.log("RI archive fail", e.message); }
-}
-}else if(isMP){
-// FIXED: Get ONLY <p> tags, ignore footer
-try{
-let proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.divinedaolibrary.com/story/martial-peak/martial-peak-chapter-${chap}/`)}`;
-let {data} = await axios.get(proxyUrl, {timeout:12000});
+let url = `https://www.divinedaolibrary.com/story/martial-peak/martial-peak-chapter-${chap}/`;
+let pUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+let {data} = await axios.get(pUrl, {timeout:12000});
 let html = typeof data === "string" ? data : (data.contents || "");
 const $ = cheerio.load(html);
-$("script, style").remove();
-let paragraphs = [];
-$(".entry-content p").each((i,el)=>{
+$("script").remove();
+let paras = [];
+$(".entry-content p").each((_,el)=>{
 let t = $(el).text().trim();
-// SKIP spam paragraphs (this fixes your screenshot)
-if(t.length < 15) return;
-if(t.includes("support the novel") || t.includes("Follow on") || t.includes("Bookmark") || t.includes("Previous Next") || t.includes("Patreon") || t.includes("http") || t.includes("thumbnail")) return;
-if(t.startsWith("Translator:") || t.startsWith("Editor:")) return;
-paragraphs.push(t);
+if(t.length < 10) return;
+let low = t.toLowerCase();
+if(low.includes("support the novel") || low.includes("subscribe follow") || low.includes("previous next") || low.includes("bookmark") || t.includes("thumbnail")) return;
+if(low.startsWith("translator:") || low.startsWith("editor:")) return;
+paras.push(t);
 });
-if(paragraphs.length > 2) text = CLEAN(paragraphs.join("\n\n"));
-}catch(e){ console.log("MP p parse fail"); }
+if(paras.length >= 2) text = paras.join("\n\n");
+}catch(e){}
+if(!text) text = await fetchViaProxy(`https://www.divinedaolibrary.com/story/martial-peak/martial-peak-chapter-${chap}/`, [".entry-content","article"]);
+}
 
-if(!text) text = await getWithProxy(`https://www.divinedaolibrary.com/story/martial-peak/martial-peak-chapter-${chap}/`, [".entry-content","article"]);
+// 2. REVEREND INSANITY
+if(!text && name.includes("reverend insanity")){
+text = await fetchViaProxy(`https://asurascans.com/reverend-insanity-chapter-${chap}`, [".chapter-content",".entry-content"]);
+if(!text) text = await fetchViaProxy(`https://novelfull.com/reverend-insanity/chapter-${chap}.html`, [".chapter-content","#chapter-content"]);
+}
+
+// 3. LORD OF THE MYSTERIES (LOTM) - NEW, FIXES YOUR SCREENSHOT
+if(!text && name.includes("lord of the mysteries")){
+// Source 1: novelbin via proxy (works if via proxy)
+text = await fetchViaProxy(`https://novelbin.com/b/lord-of-the-mysteries/chapter-${chap}`, [".chapter-content","#chr-content",".txt","article"]);
+// Source 2: lightnovelworld
+if(!text) text = await fetchViaProxy(`https://www.lightnovelworld.com/novel/lord-of-the-mysteries-${1000+chap}/chapter-${chap}`, [".chapter-content",".content"]);
+// Source 3: novelfull has LOTM
+if(!text) text = await fetchViaProxy(`https://novelfull.com/lord-of-the-mysteries/chapter-${chap}.html`, [".chapter-content"]);
+}
+
+// 4. GENERIC - for ANY other novel (solo leveling, etc)
+if(!text){
+text = await fetchViaProxy(`https://novelfull.com/${slug}/chapter-${chap}.html`, [".chapter-content","#chapter-content"]);
+if(!text) text = await fetchViaProxy(`https://novelbuddy.com/novel/${slug}/chapter-${chap}`, ["#chr-content",".chapter-content"]);
 }
 
 if(!text){
 if(readingID) try{ api.unsendMessage(readingID); }catch{}
-return message.reply(`❌ Can't get ${name} ${chap}\n\nTry: !novel ${name} ${chap+1} or !novel martial peak 1\nIf RI still fails, your host blocks Asura too. Tell me and I give you EMBEDDED RI 1-100 (no internet needed)`);
+return message.reply(`❌ Can't get ${nameRaw} ${chap}\n\nSources blocked. Try:\n• !novel martial peak ${chap}\n• !novel lotm ${chap+1}\n\nIf still fail, say EMBEDDED and I give you version with LOTM 1-100 + MP 1-100 + RI 1-100 inside file (no internet)`);
 }
 
 if(readingID) try{ api.unsendMessage(readingID); }catch{}
+
+if(text.length < 50) text = text + "\n\n[Chapter may be short or formatted]";
 
 let parts = [];
 for(let i=0;i<text.length;i+=1800) parts.push(text.substring(i,i+1800));
 
-await message.reply(`📖 ${name.toUpperCase()} - Chap ${chap}\n━━━━━━━━━━━━━━\n\n`+parts[0]);
+await message.reply(`📖 ${nameRaw.toUpperCase()} - Chap ${chap}\n━━━━━━━━━━━━━━\n\n`+parts[0]);
 for(let i=1;i<parts.length;i++){
-await new Promise(r=>setTimeout(r,600));
+await new Promise(r=>setTimeout(r,700));
 await message.reply(parts[i]);
 }
-await message.reply(`✅ End Chap ${chap} | Next: !novel ${name} ${chap+1}`);
+await message.reply(`✅ End Chap ${chap} | Next: !novel ${nameRaw} ${chap+1}`);
 }
 };
