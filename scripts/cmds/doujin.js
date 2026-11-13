@@ -1,132 +1,98 @@
 const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
-const cheerio = require("cheerio");
 
 module.exports = {
   config: {
     name: "doujin",
-    aliases: ["nh", "nhentai"],
-    version: "3.0-TO-BYPASS",
+    aliases: ["nh"],
+    version: "5.2-FIXED-YOUR-CODE",
     author: "Feng",
     role: 0,
     category: "nsfw",
-    guide: "{pn} 397378 | {pn} random"
+    guide: "{pn} 275224"
   },
   onStart: async function({ api, event, args, message }) {
     const nsfwPath = path.join(__dirname, "cache", "nsfw.json");
     fs.ensureDirSync(path.join(__dirname, "cache"));
     if (!fs.existsSync(nsfwPath)) fs.writeJsonSync(nsfwPath, {});
-    let nsfwData = fs.readJsonSync(nsfwPath);
-    if (!nsfwData[event.threadID]) return message.reply("❌ NSFW OFF\nAdmin: !nsfw on");
+    if (!fs.readJsonSync(nsfwPath)[event.threadID]) return message.reply("❌ NSFW OFF\n!nsfw on");
 
-    let input = (args[0] || "random").toLowerCase();
-    let id = input === "random" ? Math.floor(Math.random() * 400000) + 10000 : parseInt(input);
-    if (isNaN(id)) id = Math.floor(Math.random() * 400000) + 10000;
+    let id = parseInt(args[0]) || Math.floor(Math.random() * 300000) + 20000;
 
-    let loading;
-    try { loading = await api.sendMessage(`🔞 Loading ${id}...`, event.threadID); } catch {}
-
-    const getHtml = async (url) => {
-      for (let proxy of [
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-        `https://corsproxy.io/?${encodeURIComponent(url)}`,
-        url
-      ]) {
+    const getJson = async (url) => {
+      let proxies = [
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+      ];
+      for (let p of proxies) {
         try {
-          let { data } = await axios.get(proxy, { timeout: 15000, headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-          let html = typeof data === "string" ? data : data.contents || "";
-          if (html && html.length > 1000 && html.includes("nhentai")) return html;
+          let { data } = await axios.get(p, { timeout: 20000 });
+          let j = typeof data === "string" ? JSON.parse(data) : data;
+          if (j && (j.id || j.media_id)) return j;
         } catch {}
       }
       return null;
     };
 
-    try {
-      // Try nhentai.to scrape (no cloudflare)
-      let html = await getHtml(`https://nhentai.to/g/${id}/`);
-      if (!html) html = await getHtml(`https://nhentai.net/g/${id}/`);
+    let data = await getJson(`https://api.janda.sexy/nhentai/${id}`);
+    if (!data) data = await getJson(`https://nhentai.net/api/gallery/${id}`);
+    if (!data) return message.reply(`❌ ID ${id} not found`);
 
-      if (!html) throw new Error("All proxies blocked");
+    let title = data.title?.english || data.title?.pretty || data.title || `Doujin ${id}`;
+    let mediaId = data.media_id || data.media;
+    let pages = data.images?.pages || data.pages || [];
 
-      const $ = cheerio.load(html);
-      let title = $("h1.title, #info h1, .title").first().text().trim() || `Doujin ${id}`;
-      let pages = $(".pages, #info .tags .tag").text().match(/(\d+)\s*pages/i);
-      let numPages = pages ? pages[1] : $("img.lazyload, .thumb-container img").length || 0;
+    // FIX: janda returns images as array of URLs
+    let isDirectUrls = data.images && Array.isArray(data.images) && typeof data.images[0] === "string";
+    if (isDirectUrls) pages = data.images;
 
-      // Get image list from script tag
-      let imageUrls = [];
-      $("script").each((i, el) => {
-        let t = $(el).html();
-        if (t && t.includes("gallery") && t.includes("media_id")) {
-          try {
-            let m = t.match(/"media_id":\s*"?(\d+)"?/);
-            let p = t.match(/"pages":\s*(\[.*?\])/s) || t.match(/"num_pages":\s*(\d+)/);
-            if (m) {
-              let mediaId = m[1];
-              let count = parseInt(t.match(/"num_pages":\s*(\d+)/)?.[1] || 20);
-              for (let j = 1; j <= count; j++) {
-                imageUrls.push(`https://i.nhentai.net/galleries/${mediaId}/${j}.jpg`);
-              }
-            }
-          } catch {}
+    await message.reply(`🔞 ${title}\n📄 ${pages.length} pages\n🆔 ${id}\n\n⏳ Sending...`);
+
+    const cacheDir = path.join(__dirname, "cache");
+    let extMap = { j: "jpg", p: "png", g: "gif", w: "webp" };
+
+    for (let i = 0; i < pages.length; i += 2) {
+      let batch = pages.slice(i, i + 2);
+      let atts = [], paths = [];
+
+      for (let j = 0; j < batch.length; j++) {
+        let idx = i + j;
+        let original;
+
+        if (isDirectUrls) {
+          original = batch[j];
+        } else {
+          let ext = extMap[batch[j].t] || "jpg";
+          original = `https://i3.nhentai.net/galleries/${mediaId}/${idx+1}.${ext}`;
         }
-      });
 
-      // Fallback: extract thumbs
-      if (imageUrls.length === 0) {
-        $(".thumb-container img, #thumbnail-container img, .gallerythumb img").each((i, el) => {
-          let src = $(el).attr("data-src") || $(el).attr("src");
-          if (src) {
-            let full = src.replace(/t\.nhentai\.net\/galleries\/\d+\/thumb/, `i.nhentai.net/galleries/${src.match(/galleries\/(\d+)/)?.[1] || ""}`).replace(/thumb\.jpg/, `${i+1}.jpg`).replace(/\.webp/, ".jpg");
-            if (full.includes("i.nhentai")) imageUrls.push(full);
-          }
-        });
-      }
+        let imgUrl = `https://images.weserv.nl/?url=${encodeURIComponent(original.replace(/^https?:\/\//, ""))}`;
 
-      // Final fallback: use direct i server guess
-      if (imageUrls.length === 0) {
-        throw new Error("No images found - gallery maybe deleted");
-      }
-
-      if (loading) api.unsendMessage(loading.messageID);
-      await message.reply(`🔞 ${title}\n📄 ${imageUrls.length} pages\n🆔 ${id}`);
-
-      const cacheDir = path.join(__dirname, "cache");
-      for (let i = 0; i < imageUrls.length; i += 5) {
-        let batch = imageUrls.slice(i, i + 5);
-        let atts = [], paths = [];
-        for (let j = 0; j < batch.length; j++) {
-          try {
-            let p = path.join(cacheDir, `dj_${Date.now()}_${i}_${j}.jpg`);
-            let r = await axios.get(batch[j], { responseType: "arraybuffer", timeout: 15000, headers: { Referer: "https://nhentai.to/" } });
-            fs.writeFileSync(p, Buffer.from(r.data));
-            atts.push(fs.createReadStream(p));
-            paths.push(p);
-          } catch {
-            try {
-              // Try i2 server
-              let alt = batch[j].replace("i.nhentai", "i2.nhentai");
-              let p = path.join(cacheDir, `dj_${Date.now()}_${i}_${j}_2.jpg`);
-              let r = await axios.get(alt, { responseType: "arraybuffer", timeout: 15000 });
-              fs.writeFileSync(p, Buffer.from(r.data));
-              atts.push(fs.createReadStream(p));
-              paths.push(p);
-            } catch {}
-          }
-        }
-        if (atts.length) {
-          await message.reply({ attachment: atts });
-          for (let pp of paths) if (fs.existsSync(pp)) fs.unlinkSync(pp);
-          await new Promise(r => setTimeout(r, 800));
+        try {
+          let filePath = path.join(cacheDir, `dj_${Date.now()}_${idx}.jpg`);
+          let res = await axios.get(imgUrl, { responseType: "arraybuffer", timeout: 25000, headers: { "User-Agent": "Mozilla/5.0" } });
+          if (res.data.length < 5000) throw new Error("too small");
+          fs.writeFileSync(filePath, Buffer.from(res.data));
+          atts.push(fs.createReadStream(filePath));
+          paths.push(filePath);
+        } catch (e) {
+          console.log(`Img ${idx+1} fail: ${e.message}`);
         }
       }
-      return message.reply(`✅ Done! !doujin ${id+1}`);
 
-    } catch (e) {
-      if (loading) try { api.unsendMessage(loading.messageID); } catch {}
-      console.log(e);
-      return message.reply(`❌ Failed ID ${id}: ${e.message}\n\nYour host is blocking nhentai. Try:\n1. Use VPS not Render/Railway\n2. Or I can make alternative using Hentai2Read API`);
+      if (atts.length > 0) {
+        // FIX: use api.sendMessage not message.reply for attachment
+        try {
+          await api.sendMessage({ attachment: atts }, event.threadID);
+        } catch (e) {
+          console.log("Send fail:", e.message);
+          await message.reply(`❌ FB blocked image ${i+1}-${i+atts.length} - file too large`);
+        }
+        for (let p of paths) if (fs.existsSync(p)) fs.unlinkSync(p);
+        await new Promise(r => setTimeout(r, 1200));
+      }
     }
+    return message.reply(`✅ Done! !doujin ${id+1}`);
   }
 };
