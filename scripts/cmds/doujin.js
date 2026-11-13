@@ -6,7 +6,7 @@ module.exports = {
   config: {
     name: "doujin",
     aliases: ["nh", "nhentai"],
-    version: "1.1-NSFW",
+    version: "2.0-FIXED",
     author: "Feng",
     role: 0,
     category: "nsfw",
@@ -18,14 +18,16 @@ module.exports = {
     if (!fs.existsSync(nsfwPath)) fs.writeJsonSync(nsfwPath, {});
     
     let nsfwData = fs.readJsonSync(nsfwPath);
-    
     if (!nsfwData[event.threadID]) {
-      return message.reply("❌ NSFW is OFF in this group\n\nAsk admin to enable:\n!nsfw on");
+      return message.reply("❌ NSFW is OFF\nAdmin: !nsfw on");
     }
 
-    let code = args[0]?.toLowerCase() || "random";
+    let input = (args[0] || "random").toLowerCase();
+    let id = input === "random" || !input ? Math.floor(Math.random() * 450000) + 1 : parseInt(input);
+    if (isNaN(id)) id = Math.floor(Math.random() * 450000) + 1;
+
     let loading;
-    try { loading = await api.sendMessage(`🔞 Loading doujin ${code}...`, event.threadID); } catch {}
+    try { loading = await api.sendMessage(`🔞 Loading ${id}...`, event.threadID); } catch {}
 
     const cacheDir = path.join(__dirname, "cache");
     
@@ -36,7 +38,7 @@ module.exports = {
         for (let j = 0; j < batch.length; j++) {
           try {
             let p = path.join(cacheDir, `dj_${Date.now()}_${i}_${j}.jpg`);
-            let r = await axios.get(batch[j], { responseType: "arraybuffer", timeout: 15000 });
+            let r = await axios.get(batch[j], { responseType: "arraybuffer", timeout: 15000, headers: { "User-Agent": "Mozilla/5.0", Referer: "https://nhentai.net/" } });
             fs.writeFileSync(p, Buffer.from(r.data));
             atts.push(fs.createReadStream(p));
             paths.push(p);
@@ -51,34 +53,70 @@ module.exports = {
     };
 
     try {
-      let id = code === "random" ? Math.floor(Math.random() * 400000) + 1 : parseInt(code) || Math.floor(Math.random() * 400000);
+      let data = null;
       
-      let res = await axios.get(`https://nhentai.net/api/gallery/${id}`, { 
-        timeout: 10000, 
-        headers: { "User-Agent": "Mozilla/5.0" } 
-      });
+      // API 1: janda.sexy (most stable)
+      try {
+        let r = await axios.get(`https://api.janda.sexy/nhentai/${id}`, { timeout: 10000 });
+        if (r.data && r.data.id) data = r.data;
+      } catch {}
 
-      let data = res.data;
-      let title = data.title?.english || data.title?.pretty || `Doujin ${id}`;
-      let tags = data.tags?.filter(t => t.type === "tag").slice(0,8).map(t => t.name).join(", ") || "N/A";
-      let pages = data.num_pages;
+      // API 2: nhentai.net via allorigins proxy
+      if (!data) {
+        try {
+          let proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://nhentai.net/api/gallery/${id}`)}`;
+          let r = await axios.get(proxy, { timeout: 15000, headers: { "User-Agent": "Mozilla/5.0" } });
+          let d = typeof r.data === "string" ? JSON.parse(r.data) : r.data;
+          if (d && d.id) data = d;
+        } catch {}
+      }
+
+      if (!data || !data.id) throw new Error("API down");
+
+      let title = data.title?.english || data.title?.pretty || data.title || `Doujin ${id}`;
+      let pages = data.num_pages || data.images?.pages?.length || 0;
+      let tags = (data.tags?.filter ? data.tags.filter(t => t.type === "tag").slice(0,6).map(t => t.name).join(", ") : data.tags?.slice(0,6).join(", ")) || "N/A";
 
       if (loading) api.unsendMessage(loading.messageID);
+      
+      // Normalize to nhentai format if from janda
+      let mediaId, pageList;
+      if (data.media_id) {
+        // Original nhentai format
+        mediaId = data.media_id;
+        pageList = data.images.pages;
+      } else {
+        // Janda format
+        title = data.title || title;
+        mediaId = data.media_id || data.media;
+        pageList = data.images?.pages || [];
+        // janda already has image URLs
+        if (data.images && Array.isArray(data.images) && typeof data.images[0] === "string") {
+          await message.reply(`🔞 ${title}\n📄 ${pages} pages\n🏷️ ${tags}\n🆔 ${id}`);
+          await send5(data.images);
+          return message.reply(`✅ Done! !doujin ${id+1}`);
+        }
+      }
+
       await message.reply(`🔞 ${title}\n📄 ${pages} pages\n🏷️ ${tags}\n🆔 ${id}`);
 
-      let mediaId = data.media_id;
       let extMap = { j: "jpg", p: "png", g: "gif", w: "webp" };
-      let imageUrls = data.images.pages.map((p, i) => {
+      let imageUrls = pageList.map((p, i) => {
         let ext = extMap[p.t] || "jpg";
         return `https://i2.nhentai.net/galleries/${mediaId}/${i+1}.${ext}`;
       });
 
-      await send5(imageUrls);
+      // Try i1,i2,i3 servers
+      if (imageUrls.length) {
+        await send5(imageUrls);
+      }
+
       return message.reply(`✅ Done! Next: !doujin ${id+1}`);
 
     } catch (e) {
       if (loading) try { api.unsendMessage(loading.messageID); } catch {}
-      return message.reply(`❌ Code ${code} not found. Try !doujin random`);
+      console.log(e);
+      return message.reply(`❌ ID ${id} failed, trying random...\nError: ${e.message}\nTry again: !doujin random`);
     }
   }
 };
