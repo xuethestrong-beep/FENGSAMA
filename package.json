@@ -4,8 +4,8 @@
   "description": "A simple Bot chat messenger using personal account. Made by Siegfried Samá",
   "main": "index.js",
   "engines": {
-    "node": "18.x",
-    "npm": ">=7.0.0"
+    "node": "20.x",
+    "npm": ">=10.0.0"
   },
   "dependencies": {
     "@distube/ytdl-core": "4.16.12",
@@ -65,48 +65,5 @@
   },
   "scripts": {
     "start": "node index.js"
-  },
-  "author": "Siegfried Samá",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sheikhtamimlover/ST-BOT.git"
-  },
-  "keywords": [
-    "facebook",
-    "messenger",
-    "bot",
-    "chatbot",
-    "st-bot",
-    "siegfried-sama",
-    "st bot",
-    "goatbot",
-    "goatbot v2",
-    "fca",
-    "fb chat api",
-    "fca bot"
-  ],
-  "bugs": {
-    "url": "https://github.com/sheikhtamimlover/ST-BOT/issues"
-  },
-  "homepage": "https://github.com/sheikhtamimlover/ST-BOT#readme",
-  "devDependencies": {
-    "eslint": "^8.2.0",
-    "eslint-config-airbnb": "^19.0.4",
-    "eslint-config-node": "^4.1.0",
-    "eslint-config-prettier": "^8.5.0",
-    "eslint-plugin-import": "^2.25.3",
-    "eslint-plugin-jsx-a11y": "^6.5.1",
-    "eslint-plugin-node": "^11.1.0",
-    "eslint-plugin-prettier": "^4.0.0",
-    "eslint-plugin-react": "^7.28.0",
-    "eslint-plugin-react-hooks": "^4.3.0",
-    "javascript-obfuscator": "^4.0.1",
-    "npm-size": "^1.3.0",
-    "os": "^0.1.2",
-    "pm2": "^5.3.0",
-    "prettier": "^2.7.1",
-    "prompt-checkbox": "^2.2.0",
-    "terser": "^5.15.0"
   }
 }
