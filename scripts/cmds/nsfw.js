@@ -4,39 +4,55 @@ const path = require("path");
 module.exports = {
   config: {
     name: "nsfw",
-    aliases: ["nsfwallow", "setnsfw"],
-    version: "1.0",
+    version: "2.1",
     author: "Feng",
-    role: 1, // only admin can toggle
+    role: 1,
     category: "admin",
-    guide: "{pn} on/off | {pn} status"
+    guide: "{pn} on/off"
   },
   onStart: async function({ api, event, args, message }) {
-    const filePath = path.join(__dirname, "cache", "nsfw.json");
-    fs.ensureDirSync(path.join(__dirname, "cache"));
-    if (!fs.existsSync(filePath)) fs.writeJsonSync(filePath, {});
+    const dir = path.join(__dirname, "cache");
+    const nsfwPath = path.join(dir, "nsfw.json");
+    const adultPath = path.join(dir, "adult.json");
+    fs.ensureDirSync(dir);
+    if (!fs.existsSync(nsfwPath)) fs.writeJsonSync(nsfwPath, {});
+    if (!fs.existsSync(adultPath)) fs.writeJsonSync(adultPath, {});
 
-    let data = fs.readJsonSync(filePath);
-    let threadID = event.threadID;
-    let input = (args[0] || "").toLowerCase();
+    let nsfw = fs.readJsonSync(nsfwPath);
+    let adult = fs.readJsonSync(adultPath);
+    let tid = event.threadID;
+    let cmd = (args[0] || "").toLowerCase();
 
-    if (!input || input === "status" || input === "check") {
-      let status = data[threadID] ? "ON ✅" : "OFF ❌";
-      return message.reply(`🔞 NSFW Status for this group: ${status}\n\nUse:\n!nsfw on - enable\n!nsfw off - disable`);
+    // self verify
+    if (cmd === "iam18" || cmd === "verify") {
+      if (!adult[tid]) adult[tid] = [];
+      if (adult[tid].includes(event.senderID)) 
+        return message.reply("Already verified ✓");
+      adult[tid].push(event.senderID);
+      fs.writeJsonSync(adultPath, adult);
+      return message.reply("✓ Verified 18+");
     }
 
-    if (input === "on" || input === "enable") {
-      data[threadID] = true;
-      fs.writeJsonSync(filePath, data, { spaces: 2 });
-      return message.reply("✅ NSFW ENABLED for this group\nNow you can use:\n!doujin 123456\n!doujin random");
+    if (cmd === "list") {
+      let count = (adult[tid] || []).length;
+      return message.reply(`Verified: ${count} users`);
     }
 
-    if (input === "off" || input === "disable") {
-      delete data[threadID];
-      fs.writeJsonSync(filePath, data, { spaces: 2 });
-      return message.reply("❌ NSFW DISABLED for this group");
+    if (!cmd || cmd === "status") {
+      let on = nsfw[tid] ? "ON" : "OFF";
+      return message.reply(`NSFW: ${on}\n!nsfw on | off\n!nsfw iam18 - to verify`);
     }
 
-    return message.reply("Use: !nsfw on/off");
+    if (cmd === "on") {
+      nsfw[tid] = true;
+      fs.writeJsonSync(nsfwPath, nsfw);
+      return message.reply("NSFW enabled");
+    }
+
+    if (cmd === "off") {
+      delete nsfw[tid];
+      fs.writeJsonSync(nsfwPath, nsfw);
+      return message.reply("NSFW disabled");
+    }
   }
 };
