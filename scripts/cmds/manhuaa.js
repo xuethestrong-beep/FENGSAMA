@@ -4,8 +4,8 @@ const path = require("path");
 
 module.exports = {
   config: {
-    name: "manhua",
-    aliases: ["manhwa", "manwa", "manhua2"],
+    name: "manhuaa",
+    aliases: ["manhwaa", "manwaa", "manhuaa"],
     version: "1.0",
     author: "Feng",
     role: 0,
