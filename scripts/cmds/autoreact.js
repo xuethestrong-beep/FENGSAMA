@@ -1,67 +1,39 @@
 const fs = require("fs-extra");
 const path = require("path");
+const filePath = path.join(__dirname, "cache", "autoreact.json");
+if (!fs.existsSync(path.join(__dirname, "cache"))) fs.mkdirSync(path.join(__dirname, "cache"), { recursive: true });
+if (!fs.existsSync(filePath)) fs.writeJsonSync(filePath, {});
 
 module.exports = {
   config: {
     name: "autoreact",
-    version: "5.0",
-    author: "fixed by Moonlight",
-    countDown: 0,
-    role: 1,
-    shortDescription: "auto react with on/off",
-    longDescription: "auto react - can turn on/off and change emoji",
-    category: "auto",
+    aliases: ["ar"],
+    version: "2.0",
+    author: "FengSama",
+    role: 1, // ADMIN ONLY
+    countDown: 2,
+    category: "fun"
   },
-
-  onStart: async function ({ message, args, event }) {
-    const p = path.join(__dirname, "cache", "autoreact.json");
-    fs.ensureDirSync(path.join(__dirname, "cache"));
-    if (!fs.existsSync(p)) fs.writeJsonSync(p, { enabled: true, emoji: "🐷" });
-    let d = fs.readJsonSync(p);
-
-    if (!args[0]) {
-      return message.reply(
-        `Autoreact: ${d.enabled ? "ON" : "OFF"}\nEmoji: ${d.emoji}\n\n!autoreact on/off\n!autoreact set 😆\n!autoreact 😆`
-      );
-    }
-
-    if (args[0] === "on") {
-      d.enabled = true;
-      fs.writeJsonSync(p, d);
-      return message.reply(`✅ Autoreact ON | ${d.emoji}`);
-    }
+  onStart: async function ({ api, event, args, message }) {
+    const data = fs.readJsonSync(filePath);
     if (args[0] === "off") {
-      d.enabled = false;
-      fs.writeJsonSync(p, d);
-      return message.reply("✅ Autoreact OFF");
+      delete data[event.threadID];
+      fs.writeJsonSync(filePath, data);
+      return message.reply("✅ AutoReact 🍑 OFF");
     }
-    if (args[0] === "set" && args[1]) {
-      d.emoji = args[1];
-      fs.writeJsonSync(p, d);
-      return message.reply(`✅ Emoji changed to ${d.emoji}`);
-    }
-    // if directly emoji like !autoreact 😆
-    if (args[0].length <= 4) {
-      d.emoji = args[0];
-      fs.writeJsonSync(p, d);
-      return message.reply(`✅ Emoji changed to ${d.emoji}`);
-    }
+    let targetID = event.messageReply ? event.messageReply.senderID : Object.keys(event.mentions)[0];
+    if (!targetID) return message.reply("Reply to message → !autoreact\n!autoreact off to stop");
+    data[event.threadID] = targetID;
+    fs.writeJsonSync(filePath, data);
+    const info = await api.getUserInfo(targetID);
+    message.reply(`✅ AutoReact ON 🍑\nNow reacting 🍑 to all messages from ${info[targetID].name}`);
   },
-
-  onChat: async function ({ event, api }) {
-    const p = path.join(__dirname, "cache", "autoreact.json");
-    if (!fs.existsSync(p)) return;
-    let d = fs.readJsonSync(p);
-    if (!d.enabled) return;
-
-    const botID = api.getCurrentUserID();
-    if (event.senderID == botID) return;
-    
-    // don't react to bot commands
-    if (event.body && event.body.startsWith("!")) return;
-
+  onChat: async function ({ api, event }) {
     try {
-      api.setMessageReaction(d.emoji || "🐷", event.messageID, () => {}, true);
-    } catch (e) {}
+      const data = fs.readJsonSync(filePath);
+      const targetID = data[event.threadID];
+      if (!targetID || event.senderID != targetID) return;
+      api.setMessageReaction("🍑", event.messageID, () => {}, true);
+    } catch {}
   }
 };
