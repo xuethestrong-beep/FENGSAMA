@@ -8,7 +8,7 @@ module.exports = {
   langs: {
     en: {
       botAdded: "%1 Connected successfully!",
-      welcomeMessage: "BONJOUR!, {uName}\nWelcome to {threadName}\nYou're the {soThanhVien}th member! 🥳♥"
+      welcomeMessage: "Hi, {uName}\nWelcome to {threadName}\nYou're the {soThanhVien}th member!"
     }
   },
   onStart: async function ({ threadsData, event, api, getLang }) {
