@@ -1,19 +1,21 @@
 module.exports = {
   config: {
     name: "lottery",
-    version: "1.1",
-    author: "FENG",
+    version: "1.2",
+    author: "FENG (fixed)",
     countDown: 60,
     role: 0,
     description: "Buy a lottery ticket for $2,000 - 1% jackpot chance",
     category: "economy",
-    guide: "{pn}"
+    guide: {
+      en: "{pn} - $2,000 per ticket"
+    }
   },
 
   onStart: async function ({ message, usersData, event }) {
     try {
       const uid = event.senderID;
-      const userData = await usersData.get(uid) || {};
+      const userData = (await usersData.get(uid)) || {};
       const bal = Math.max(0, Number(userData.money) || 0);
       const cost = 2000;
 
@@ -23,7 +25,7 @@ module.exports = {
       let reward = 0;
       let msg = `🎟️ LOTTERY — $${cost.toLocaleString()}\n──────────────\n`;
 
-      // EV: 1%*50k + 9%*5k + 20%*2.5k = $1,450 on $2,000 cost = 72.5% RTP
+      // RTP 72.5% - good house edge
       if (r < 0.01) {
         reward = 50000;
         msg += `🎉 JACKPOT!!!\n💰 Won $${reward.toLocaleString()}!!!`;
@@ -38,15 +40,14 @@ module.exports = {
       }
 
       const newBal = bal - cost + reward;
-
-      await usersData.set(uid, {
-        money: newBal,
-        data: userData.data || {}
-      });
+      
+      // FIXED
+      await usersData.set(uid, { money: newBal });
 
       return message.reply(msg + `\n💵 Balance: $${newBal.toLocaleString()}`);
+
     } catch (e) {
-      console.error("[LOTTERY] Error:", e.message);
+      console.error("[LOTTERY] Error:", e);
       return message.reply("❌ Lottery failed. Try again.");
     }
   }
