@@ -1,48 +1,62 @@
 module.exports = {
   config: {
     name: "balance",
-    aliases: ["bal"],
-    version: "3.1",
-    author: "FENG",
+    aliases: ["bal", "money"],
+    version: "3.2",
+    author: "FENG (fixed)",
     countDown: 2,
     role: 0,
     description: "Check wallet, bank and total balance",
     category: "economy",
-    guide: "{pn} - check your balance\n{pn} @user - check someone else"
+    guide: {
+      en: "{pn} - check your balance\n{pn} @user - check someone else's balance"
+    }
   },
 
   onStart: async function ({ message, usersData, event }) {
     try {
       const { bankData } = global.db;
-      const f = (n) => `$${Number(n || 0).toLocaleString()}`;
+      const format = (n) => `$${Number(n || 0).toLocaleString()}`;
 
       const getUser = async (uid, mentionName) => {
-        const userData = await usersData.get(uid) || {};
-        const w = Math.max(0, Number(userData.money) || 0);
-        let b = 0;
+        const userData = (await usersData.get(uid)) || {};
+        const wallet = Math.max(0, Number(userData.money) || 0);
+        
+        let bank = 0;
         try {
-          b = Math.max(0, Number((await bankData.get(uid))?.bankBalance) || 0);
+          const bankInfo = await bankData.get(uid);
+          bank = Math.max(0, Number(bankInfo?.bankBalance) || 0);
         } catch {}
-        const total = w + b;
+
+        const total = wallet + bank;
 
         let taxLabel = "";
-        let taxNote = "✅ No tax";
+        let taxNote = "✅ No tax - keep grinding!";
+
         if (total >= 1000000) {
-          taxLabel = " 💀 8%";
-          taxNote = "⚠️ Rich tax bracket: 8%";
+          taxLabel = " 💀 8% Tax";
+          taxNote = "⚠️ Rich tax: 8% on next income";
         } else if (total >= 500000) {
-          taxLabel = " ⚠️ 5%";
-          taxNote = "⚠️ Rich tax bracket: 5%";
+          taxLabel = " ⚠️ 5% Tax";
+          taxNote = "⚠️ Rich tax: 5% on next income";
         } else if (total >= 100000) {
-          taxLabel = " 2%";
-          taxNote = "⚠️ Rich tax bracket: 2%";
+          taxLabel = " 2% Tax";
+          taxNote = "⚠️ Tax bracket: 2%";
         }
 
         if (mentionName) {
           const cleanName = String(mentionName).replace(/^@/, "");
-          return `👤 ${cleanName}${taxLabel}\n💰 ${f(total)} total\n↳ 💵 ${f(w)} • 🏦 ${f(b)}`;
+          return `👤 ${cleanName}${taxLabel}\n💰 ${format(total)} total\n↳ 💵 ${format(wallet)} wallet • 🏦 ${format(bank)} bank`;
         }
-        return `💳 balance${taxLabel}\n──────────────\n💰 ${f(total)} total\n\n💵 wallet ${f(w)}\n🏦 bank ${f(b)}\n\n${taxNote}`;
+
+        return (
+          `💳 Your Balance${taxLabel}\n` +
+          `──────────────\n` +
+          `💰 ${format(total)} total\n\n` +
+          `💵 Wallet: ${format(wallet)}\n` +
+          `🏦 Bank: ${format(bank)}\n\n` +
+          `${taxNote}`
+        );
       };
 
       const mentions = event.mentions || {};
@@ -51,14 +65,15 @@ module.exports = {
       if (mentionIDs.length > 0) {
         let msg = "";
         for (const uid of mentionIDs) {
-          msg += await getUser(uid, mentions[uid]) + "\n\n";
+          msg += (await getUser(uid, mentions[uid])) + "\n\n";
         }
         return message.reply(msg.trim());
       }
 
       return message.reply(await getUser(event.senderID, null));
+
     } catch (err) {
-      console.error("[BALANCE] Error:", err.message);
+      console.error("[BALANCE] Error:", err);
       return message.reply("❌ Failed to get balance. Try again.");
     }
   }
